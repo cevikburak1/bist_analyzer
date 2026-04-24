@@ -206,6 +206,10 @@ def _build_summary_payload(result: BuffettStockResult) -> dict:
     """Liste sayfasında gösterilecek satır."""
     bundle = result.bundle
     info = bundle.info
+    horizon = result.signal.horizon_guidance
+    long_verdict = horizon.long.verdict if horizon else None
+    short_verdict = horizon.short.verdict if horizon else None
+    medium_verdict = horizon.medium.verdict if horizon else None
     return {
         "symbol": bundle.symbol,
         "name": info.get("longName") or bundle.symbol,
@@ -220,7 +224,11 @@ def _build_summary_payload(result: BuffettStockResult) -> dict:
         "margin_of_safety": _safe_json_value(result.signal.margin_of_safety),
         "holding_recommendation": result.signal.holding_recommendation,
         "warnings_count": len(result.signal.warnings),
+        "classification_reason": result.signal.classification_reason,
         "key_metrics": _key_metrics_summary(bundle, result.score),
+        "horizon_short": short_verdict,
+        "horizon_medium": medium_verdict,
+        "horizon_long": long_verdict,
     }
 
 

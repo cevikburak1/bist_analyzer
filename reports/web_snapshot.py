@@ -143,6 +143,7 @@ def _build_signal_payload(sig: Signal) -> dict[str, Any]:
     fib = sig.fibonacci
     ew = sig.elliott_wave
     comm = sig.commentary
+    horizon = sig.horizon_guidance
 
     return {
         "symbol": sig.symbol,
@@ -211,6 +212,7 @@ def _build_signal_payload(sig: Signal) -> dict[str, Any]:
             "risks": comm.risks if comm else [],
         },
         "reason": sig.reason,
+        "reason_factors": list(sig.reason_factors),
         "score_breakdown": {
             "trend": sig.score_breakdown.trend,
             "momentum": sig.score_breakdown.momentum,
@@ -218,6 +220,10 @@ def _build_signal_payload(sig: Signal) -> dict[str, Any]:
             "price_position": sig.score_breakdown.price_position,
             "market_regime": sig.score_breakdown.market_regime,
         },
+        "horizon_guidance": horizon.as_dict() if horizon else None,
+        "horizon_scores": (
+            sig.horizon_scores.as_dict() if sig.horizon_scores else None
+        ),
     }
 
 

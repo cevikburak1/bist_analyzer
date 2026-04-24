@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPrice } from "@/lib/formatters";
-import type { ReportSignal } from "@/lib/types/report";
+import type { ReportSignal, HorizonKey, HorizonScore } from "@/lib/types/report";
 import { SignalBadge } from "@/components/stocks/signal-badge";
+import { HORIZON_OPTIONS, useHorizon } from "@/lib/horizon-context";
 
 type SortKey =
   | "symbol"
@@ -26,12 +27,51 @@ type StockTableProps = {
 
 const PAGE_SIZE = 25;
 
+type HorizonView = {
+  score: number;
+  decision: string;
+  stop: number;
+  target: number;
+  rr: number;
+  isIndicative: boolean;
+};
+
+function getHorizonView(signal: ReportSignal, horizon: HorizonKey): HorizonView {
+  const scoreSet = signal.horizon_scores;
+  if (scoreSet) {
+    const hs: HorizonScore | undefined = scoreSet[horizon];
+    if (hs) {
+      const t = hs.targets;
+      return {
+        score: hs.total,
+        decision: hs.decision,
+        stop: t?.stop_loss ?? 0,
+        target: t?.target_price ?? 0,
+        rr: t?.rr ?? 0,
+        isIndicative: !!t?.note,
+      };
+    }
+  }
+  return {
+    score: signal.score,
+    decision: signal.signal_daily,
+    stop: signal.targets.stop_loss || signal.stop_loss,
+    target: signal.targets.short_target,
+    rr: signal.targets.short_rr,
+    isIndicative: signal.signal_daily === "BEKLE",
+  };
+}
+
 export function StockTable({ signals }: StockTableProps) {
+  const { horizon, setHorizon } = useHorizon();
   const [search, setSearch] = useState("");
   const [signalFilter, setSignalFilter] = useState("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
+
+  const horizonLabel =
+    HORIZON_OPTIONS.find((o) => o.value === horizon)?.label ?? "Gunluk";
 
   const filtered = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -42,10 +82,11 @@ export function StockTable({ signals }: StockTableProps) {
         signal.commentary.summary.toLowerCase().includes(normalizedSearch) ||
         signal.reason.toLowerCase().includes(normalizedSearch);
 
-      const matchesSignal = signalFilter === "ALL" || signal.signal_daily === signalFilter;
+      const view = getHorizonView(signal, horizon);
+      const matchesSignal = signalFilter === "ALL" || view.decision === signalFilter;
       return matchesSearch && matchesSignal;
     });
-  }, [search, signalFilter, signals]);
+  }, [search, signalFilter, signals, horizon]);
 
   const sorted = useMemo(() => {
     const next = [...filtered];
@@ -53,23 +94,24 @@ export function StockTable({ signals }: StockTableProps) {
       const multiplier = sortDirection === "asc" ? 1 : -1;
 
       const value = (signal: ReportSignal) => {
+        const view = getHorizonView(signal, horizon);
         switch (sortKey) {
           case "symbol":
             return signal.symbol;
           case "score":
-            return signal.score;
+            return view.score;
           case "price":
             return signal.price;
           case "rsi":
             return signal.rsi;
           case "stopLoss":
-            return signal.targets.stop_loss || signal.stop_loss;
+            return view.stop;
           case "shortTarget":
-            return signal.targets.short_target;
+            return view.target;
           case "mediumTarget":
-            return signal.targets.medium_target;
+            return view.target;
           case "longTarget":
-            return signal.targets.long_target;
+            return view.target;
         }
       };
 
@@ -83,7 +125,7 @@ export function StockTable({ signals }: StockTableProps) {
       return (((leftValue as number) ?? 0) - ((rightValue as number) ?? 0)) * multiplier;
     });
     return next;
-  }, [filtered, sortDirection, sortKey]);
+  }, [filtered, sortDirection, sortKey, horizon]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -109,6 +151,42 @@ export function StockTable({ signals }: StockTableProps) {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wide text-slate-400">
+              Listeleme Vadesi
+            </div>
+            <div className="text-sm text-slate-200">
+              Skorlar ve AL/SAT/BEKLE kararları seçilen vadeye göre güncellenir
+            </div>
+          </div>
+          <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-slate-800">
+            {HORIZON_OPTIONS.map((opt) => {
+              const active = opt.value === horizon;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setHorizon(opt.value);
+                    setPage(1);
+                  }}
+                  className={`flex flex-col items-center px-4 py-2 text-xs transition ${
+                    active
+                      ? "bg-cyan-500/15 text-cyan-200"
+                      : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+                  }`}
+                >
+                  <span className="font-semibold">{opt.label}</span>
+                  <span className="text-[10px] text-slate-500">{opt.subtitle}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="relative w-full md:max-w-sm">
           <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
@@ -138,7 +216,7 @@ export function StockTable({ signals }: StockTableProps) {
             <option value="BEKLE">BEKLE</option>
           </select>
           <div className="text-sm text-slate-400">
-            {filtered.length} hisse
+            {filtered.length} hisse | Vade: {horizonLabel}
           </div>
         </div>
       </div>
@@ -153,10 +231,10 @@ export function StockTable({ signals }: StockTableProps) {
                     Hisse {sortKey === "symbol" ? sortIcon : null}
                   </button>
                 </TableHead>
-                <TableHead className="text-center text-slate-300">Gunluk</TableHead>
+                <TableHead className="text-center text-slate-300">{horizonLabel}</TableHead>
                 <TableHead className="text-center">
                   <button type="button" className="mx-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("score")}>
-                    Skor {sortKey === "score" ? sortIcon : null}
+                    Skor ({horizonLabel}) {sortKey === "score" ? sortIcon : null}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
@@ -171,10 +249,12 @@ export function StockTable({ signals }: StockTableProps) {
                 </TableHead>
                 <TableHead className="text-right">
                   <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("stopLoss")}>
-                    Stop {sortKey === "stopLoss" ? sortIcon : null}
+                    Stop ({horizonLabel}) {sortKey === "stopLoss" ? sortIcon : null}
                   </button>
                 </TableHead>
-                <TableHead className="text-right text-slate-300">K/O/U Hedef</TableHead>
+                <TableHead className="text-right text-slate-300">
+                  Hedef ({horizonLabel})
+                </TableHead>
                 <TableHead className="text-center text-slate-300">R/O</TableHead>
                 <TableHead className="text-slate-300">Fib</TableHead>
                 <TableHead className="text-slate-300">Mum</TableHead>
@@ -182,7 +262,9 @@ export function StockTable({ signals }: StockTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pageData.map((signal) => (
+              {pageData.map((signal) => {
+                const view = getHorizonView(signal, horizon);
+                return (
                 <TableRow key={signal.symbol} className="border-slate-800 hover:bg-slate-900/60">
                   <TableCell>
                     <div className="flex flex-col">
@@ -195,29 +277,45 @@ export function StockTable({ signals }: StockTableProps) {
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <SignalBadge signal={signal.signal_daily} />
+                    <SignalBadge signal={view.decision} />
                   </TableCell>
                   <TableCell className="text-center">
                     <span
                       className={
-                        signal.score >= 65
+                        view.score >= 65
                           ? "font-semibold text-emerald-300"
-                          : signal.score <= 35
+                          : view.score <= 35
                             ? "font-semibold text-rose-300"
                             : "font-semibold text-amber-200"
                       }
                     >
-                      {signal.score.toFixed(1)}
+                      {view.score.toFixed(1)}
                     </span>
                   </TableCell>
                   <TableCell className="text-right text-slate-200">{formatPrice(signal.price)}</TableCell>
                   <TableCell className="text-right text-slate-300">{signal.rsi.toFixed(1)}</TableCell>
-                  <TableCell className="text-right text-rose-300">{formatPrice(signal.targets.stop_loss || signal.stop_loss)}</TableCell>
-                  <TableCell className="text-right text-xs text-emerald-300">
-                    {formatPrice(signal.targets.short_target)} / {formatPrice(signal.targets.medium_target)} / {formatPrice(signal.targets.long_target)}
+                  <TableCell
+                    className={`text-right ${
+                      view.isIndicative ? "text-rose-400/60 italic" : "text-rose-300"
+                    }`}
+                    title={view.isIndicative ? "Bu vadede aktif giris onerilmez (gosterici seviye)" : undefined}
+                  >
+                    {view.stop > 0 ? formatPrice(view.stop) : "-"}
                   </TableCell>
-                  <TableCell className="text-center text-xs text-slate-300">
-                    {signal.targets.short_rr.toFixed(1)} / {signal.targets.medium_rr.toFixed(1)} / {signal.targets.long_rr.toFixed(1)}
+                  <TableCell
+                    className={`text-right text-xs ${
+                      view.isIndicative ? "text-emerald-400/60 italic" : "text-emerald-300"
+                    }`}
+                    title={view.isIndicative ? "Bu vadede aktif giris onerilmez (gosterici seviye)" : undefined}
+                  >
+                    {view.target > 0 ? formatPrice(view.target) : "-"}
+                  </TableCell>
+                  <TableCell
+                    className={`text-center text-xs ${
+                      view.isIndicative ? "text-slate-500 italic" : "text-slate-300"
+                    }`}
+                  >
+                    {view.rr > 0 ? view.rr.toFixed(2) : "-"}
                   </TableCell>
                   <TableCell className="max-w-[220px] text-xs text-slate-300">
                     <div>D: {formatPrice(signal.fibonacci.support)}</div>
@@ -235,7 +333,8 @@ export function StockTable({ signals }: StockTableProps) {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

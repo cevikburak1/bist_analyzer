@@ -80,6 +80,61 @@ export type ScoreBreakdown = {
   market_regime: number;
 };
 
+export type HorizonVerdict = {
+  verdict: string;
+  label: string;
+  color: string;
+  reason: string;
+  factors: string[];
+  rr: number | null;
+  target_price: number | null;
+  reward_pct: number | null;
+};
+
+export type HorizonGuidance = {
+  short: HorizonVerdict;
+  medium: HorizonVerdict;
+  long: HorizonVerdict;
+  overall: string;
+};
+
+export type HorizonKey = "short" | "swing" | "medium" | "long";
+
+export type HorizonCategoryScore = {
+  earned: number;
+  possible: number;
+  factors: string[];
+};
+
+export type HorizonTargets = {
+  direction: "LONG" | "SHORT" | "NONE" | string;
+  entry: number;
+  stop_loss: number;
+  target_price: number;
+  risk_pct: number;
+  reward_pct: number;
+  rr: number;
+  note: string;
+};
+
+export type HorizonScore = {
+  horizon: HorizonKey;
+  label: string;
+  total: number;
+  decision: string;
+  reason: string;
+  reason_factors: string[];
+  categories: Record<string, HorizonCategoryScore>;
+  targets: HorizonTargets | null;
+};
+
+export type HorizonScoreSet = {
+  short: HorizonScore;
+  swing: HorizonScore;
+  medium: HorizonScore;
+  long: HorizonScore;
+};
+
 export type ReportSignal = {
   symbol: string;
   price: number;
@@ -104,7 +159,10 @@ export type ReportSignal = {
   elliott_wave: ElliottWaveData;
   commentary: CommentaryData;
   reason: string;
+  reason_factors: string[];
   score_breakdown: ScoreBreakdown;
+  horizon_guidance: HorizonGuidance | null;
+  horizon_scores: HorizonScoreSet | null;
 };
 
 export type ReportData = {

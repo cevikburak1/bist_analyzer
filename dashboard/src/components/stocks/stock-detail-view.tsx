@@ -6,6 +6,9 @@ import { formatDateTime, formatPercent, formatPrice } from "@/lib/formatters";
 import type { StockDetailData } from "@/lib/types/report";
 import { SignalBadge } from "@/components/stocks/signal-badge";
 import { StockPriceChart } from "@/components/stocks/stock-price-chart";
+import { DecisionReasonCard } from "@/components/shared/decision-reason-card";
+import { HorizonGuidanceCard } from "@/components/shared/horizon-guidance-card";
+import { HorizonScoresPanel } from "@/components/stocks/horizon-scores-panel";
 
 type StockDetailViewProps = {
   detail: StockDetailData;
@@ -100,6 +103,55 @@ export function StockDetailView({ detail }: StockDetailViewProps) {
             </div>
           </DetailCard>
         </div>
+
+        {signal.horizon_scores ? (
+          <HorizonScoresPanel scores={signal.horizon_scores} />
+        ) : null}
+
+        <DecisionReasonCard
+          title="Gunluk Karar Gerekcesi (legacy)"
+          decisionLabel={signal.signal_daily}
+          reason={signal.reason}
+          bulletReasons={signal.reason_factors}
+        />
+
+        {signal.horizon_guidance ? (
+          <HorizonGuidanceCard
+            title="Teknik Vade Onerileri (Kisa / Orta / Uzun)"
+            description="Teknik gostergelere ve hedef R/O degerlerine dayali vade bazli karar"
+            short={{
+              label: signal.horizon_guidance.short.label,
+              verdict: signal.horizon_guidance.short.verdict,
+              color: signal.horizon_guidance.short.color,
+              reason: signal.horizon_guidance.short.reason,
+              factors: signal.horizon_guidance.short.factors,
+              rr: signal.horizon_guidance.short.rr,
+              targetPrice: signal.horizon_guidance.short.target_price,
+              rewardPct: signal.horizon_guidance.short.reward_pct,
+            }}
+            medium={{
+              label: signal.horizon_guidance.medium.label,
+              verdict: signal.horizon_guidance.medium.verdict,
+              color: signal.horizon_guidance.medium.color,
+              reason: signal.horizon_guidance.medium.reason,
+              factors: signal.horizon_guidance.medium.factors,
+              rr: signal.horizon_guidance.medium.rr,
+              targetPrice: signal.horizon_guidance.medium.target_price,
+              rewardPct: signal.horizon_guidance.medium.reward_pct,
+            }}
+            long={{
+              label: signal.horizon_guidance.long.label,
+              verdict: signal.horizon_guidance.long.verdict,
+              color: signal.horizon_guidance.long.color,
+              reason: signal.horizon_guidance.long.reason,
+              factors: signal.horizon_guidance.long.factors,
+              rr: signal.horizon_guidance.long.rr,
+              targetPrice: signal.horizon_guidance.long.target_price,
+              rewardPct: signal.horizon_guidance.long.reward_pct,
+            }}
+            overall={signal.horizon_guidance.overall}
+          />
+        ) : null}
 
         <StockPriceChart detail={detail} />
 

@@ -7,14 +7,16 @@ import { ScoreBreakdown } from "@/components/buffett/score-breakdown";
 import { HistoryCharts } from "@/components/buffett/history-charts";
 import { DcfCard } from "@/components/buffett/dcf-card";
 import { WarningsCard } from "@/components/buffett/warnings-card";
-import { formatPrice } from "@/lib/formatters";
+import { DecisionReasonCard } from "@/components/shared/decision-reason-card";
+import { HorizonGuidanceCard } from "@/components/shared/horizon-guidance-card";
+import { describeRatioPercent, formatPrice } from "@/lib/formatters";
 import type { BuffettStockDetail } from "@/lib/types/buffett";
 
 type Props = { detail: BuffettStockDetail };
 
 function pct(v: number | null | undefined) {
   if (v === null || v === undefined || Number.isNaN(v)) return "-";
-  return `${(v * 100).toFixed(1)}%`;
+  return describeRatioPercent(v).label;
 }
 
 export function BuffettDetailView({ detail }: Props) {
@@ -72,6 +74,42 @@ export function BuffettDetailView({ detail }: Props) {
             <p className="text-xs text-slate-500">Mevcut fiyat: {formatPrice(intrinsic.current_price ?? null)}</p>
           </div>
         </div>
+
+        <DecisionReasonCard
+          title="Karar Gerekçesi"
+          decisionLabel={sig.label}
+          reason={sig.classification_reason || sig.holding_recommendation}
+          factors={sig.classification_factors}
+        />
+
+        {sig.horizon_guidance ? (
+          <HorizonGuidanceCard
+            title="Buffett Vade Önerileri (Temel Analiz)"
+            description="Buffett çerçevesinde kısa, orta ve uzun vade için ayrı tutma kararı"
+            short={{
+              label: sig.horizon_guidance.short.label,
+              verdict: sig.horizon_guidance.short.verdict,
+              color: sig.horizon_guidance.short.color,
+              reason: sig.horizon_guidance.short.reason,
+              factors: sig.horizon_guidance.short.factors,
+            }}
+            medium={{
+              label: sig.horizon_guidance.medium.label,
+              verdict: sig.horizon_guidance.medium.verdict,
+              color: sig.horizon_guidance.medium.color,
+              reason: sig.horizon_guidance.medium.reason,
+              factors: sig.horizon_guidance.medium.factors,
+            }}
+            long={{
+              label: sig.horizon_guidance.long.label,
+              verdict: sig.horizon_guidance.long.verdict,
+              color: sig.horizon_guidance.long.color,
+              reason: sig.horizon_guidance.long.reason,
+              factors: sig.horizon_guidance.long.factors,
+            }}
+            overall={sig.horizon_guidance.overall}
+          />
+        ) : null}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 lg:col-span-1">

@@ -4,13 +4,16 @@
  */
 
 import type { BuffettIntrinsic } from "@/lib/types/buffett";
-import { formatPrice } from "@/lib/formatters";
+import { describeRatioPercent, formatPrice } from "@/lib/formatters";
 
 type Props = { intrinsic: BuffettIntrinsic };
 
 function pct(v: number | null | undefined) {
-  if (v === null || v === undefined || Number.isNaN(v)) return "-";
-  return `${(v * 100).toFixed(1)}%`;
+  return describeRatioPercent(v).label;
+}
+
+function isAnomaly(v: number | null | undefined) {
+  return describeRatioPercent(v).isAnomaly;
 }
 
 export function DcfCard({ intrinsic }: Props) {
@@ -26,15 +29,27 @@ export function DcfCard({ intrinsic }: Props) {
   }
 
   const mos = intrinsic.margin_of_safety;
-  const mosColor =
-    mos === null ? "text-slate-300"
-      : mos >= 0.30 ? "text-emerald-300"
-        : mos >= 0 ? "text-amber-300"
+  const mosAnomaly = isAnomaly(mos);
+  const mosColor = mosAnomaly
+    ? "text-amber-300"
+    : mos === null
+      ? "text-slate-300"
+      : mos >= 0.30
+        ? "text-emerald-300"
+        : mos >= 0
+          ? "text-amber-300"
           : "text-rose-300";
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
       <h3 className="text-sm font-semibold text-slate-100">DCF (Adil Değer)</h3>
+      {mosAnomaly ? (
+        <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          Bu hisse için DCF çıktıları olağan dışı bir büyüklüğe sahip (hisse adedi
+          veya FCF eşleşmesinde uyumsuzluk). Güvenlik marjı bu nedenle "Veri
+          Anomalisi" olarak işaretlendi.
+        </p>
+      ) : null}
       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
         <Row label="Adil Değer / Hisse" value={formatPrice(intrinsic.intrinsic_value_per_share ?? null)} accent="text-slate-100" />
         <Row label="Mevcut Fiyat" value={formatPrice(intrinsic.current_price ?? null)} />

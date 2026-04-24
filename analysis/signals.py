@@ -22,6 +22,14 @@ from analysis.candle_patterns import CandlePattern, detect_all_patterns, pattern
 from analysis.elliott_wave import ElliottWaveResult, analyze_elliott_wave
 from analysis.targets import TargetLevels, calculate_targets
 from analysis.commentary import Commentary, generate_commentary
+from analysis.horizon_guidance import (
+    TechnicalHorizonGuidance,
+    build_technical_horizon_guidance,
+)
+from analysis.horizon_scoring import (
+    HorizonScoreSet,
+    calculate_horizon_score_set,
+)
 from config import (
     BUY_THRESHOLD,
     SELL_THRESHOLD,
@@ -67,6 +75,11 @@ class Signal:
     targets: Optional[TargetLevels] = None
     commentary: Optional[Commentary] = None
     summary: str = ""
+    # Vade bazlı tutma önerisi (kısa/orta/uzun) + gerekçe
+    horizon_guidance: Optional[TechnicalHorizonGuidance] = None
+    reason_factors: list[str] = field(default_factory=list)
+    # Vade bazlı skorlar ve kararlar (short/swing/medium/long)
+    horizon_scores: Optional[HorizonScoreSet] = None
 
 
 def _trend_label(indicators: dict) -> str:
@@ -162,35 +175,74 @@ def generate_signal(
 
     signal = "BEKLE"
     reason = ""
+    reason_factors: list[str] = []
+
+    score_buy_ok = score >= BUY_THRESHOLD
+    rsi_buy_ok = RSI_BUY_LOW <= rsi <= RSI_BUY_HIGH
+    above_sma_long = sma_long <= 0 or close > sma_long
+    volume_ok = vol_avg <= 0 or vol_short >= vol_avg * VOLUME_MULTIPLIER
 
     # ── SAT kontrolleri ──
     if score <= SELL_THRESHOLD:
         signal = "SAT"
-        reason = f"Düşük skor ({score:.0f})"
+        reason = f"Düşük skor ({score:.0f}/100 ≤ {SELL_THRESHOLD}) - SAT eşiği aşıldı"
+        reason_factors.append(f"Skor {score:.0f} ≤ SAT eşiği {SELL_THRESHOLD}")
     elif rsi > RSI_OVERBOUGHT and bb_upper > 0 and close > bb_upper:
         signal = "SAT"
-        reason = f"Aşırı alım (RSI={rsi:.0f}) + BB üst band kırıldı"
+        reason = (
+            f"Aşırı alım: RSI {rsi:.0f} > {RSI_OVERBOUGHT} ve fiyat Bollinger üst "
+            f"band {bb_upper:.2f} üzerinde"
+        )
+        reason_factors.append(f"RSI {rsi:.0f} > {RSI_OVERBOUGHT}")
+        reason_factors.append("BB üst band kırılımı")
     elif macd < macd_signal_val and sma_short > 0 and close < sma_short:
         signal = "SAT"
-        reason = f"MACD negatif + SMA50 altında"
+        reason = (
+            "MACD signal'in altında ve fiyat SMA50 altında - "
+            "kısa/orta vade trend bozulması"
+        )
+        reason_factors.append("MACD < signal")
+        reason_factors.append("Fiyat SMA50 altında")
     # ── AL kontrolleri ──
-    elif (
-        score >= BUY_THRESHOLD
-        and RSI_BUY_LOW <= rsi <= RSI_BUY_HIGH
-        and (sma_long <= 0 or close > sma_long)
-        and (vol_avg <= 0 or vol_short >= vol_avg * VOLUME_MULTIPLIER)
-    ):
+    elif score_buy_ok and rsi_buy_ok and above_sma_long and volume_ok:
         signal = "AL"
-        reason = f"Güçlü skor ({score:.0f}) + tüm koşullar sağlandı"
+        reason = (
+            f"Güçlü skor ({score:.0f}/100 ≥ {BUY_THRESHOLD}), RSI sağlıklı bantta, "
+            "fiyat 200 SMA üstünde ve hacim ortalamanın üstünde - tüm AL koşulları sağlandı"
+        )
+        reason_factors.extend([
+            f"Skor {score:.0f} ≥ AL eşiği {BUY_THRESHOLD}",
+            f"RSI {rsi:.0f} ∈ [{RSI_BUY_LOW},{RSI_BUY_HIGH}]",
+            "Fiyat 200 SMA üstünde",
+            "Hacim AL eşiğini karşılıyor",
+        ])
         if should_filter_buy_signals(market_regime):
             signal = "BEKLE"
-            reason = f"AL filtresi (düşüş rejimi): skor {score:.0f}"
+            reason = (
+                f"AL koşulları sağlandı (skor {score:.0f}) ancak piyasa rejimi "
+                f"'{market_regime.label}' - düşüş rejiminde AL filtreleniyor"
+            )
+            reason_factors.append(f"Piyasa rejimi filtresi: {market_regime.label}")
     # ── BEKLE ──
     else:
-        if score >= BUY_THRESHOLD:
-            reason = f"Skor yeterli ({score:.0f}) ama bazı koşullar sağlanmadı"
+        if score_buy_ok:
+            missing: list[str] = []
+            if not rsi_buy_ok:
+                missing.append(f"RSI {rsi:.0f} alım bandı [{RSI_BUY_LOW},{RSI_BUY_HIGH}] dışında")
+            if not above_sma_long:
+                missing.append("fiyat 200 SMA altında")
+            if not volume_ok:
+                missing.append("hacim AL eşiğini karşılamıyor")
+            reason = (
+                f"Skor yeterli ({score:.0f}/100) ama AL için eksik: " + ", ".join(missing)
+            )
+            reason_factors.extend(missing)
         else:
-            reason = f"Skor orta ({score:.0f})"
+            reason = (
+                f"Skor orta ({score:.0f}/100) - AL eşiği {BUY_THRESHOLD}, "
+                f"SAT eşiği {SELL_THRESHOLD}; her iki tarafa da net sinyal yok"
+            )
+            reason_factors.append(f"Skor {score:.0f} aralığı [{SELL_THRESHOLD+1},{BUY_THRESHOLD-1}]")
 
     # ── Stop / Hedef (eski sistem) ──
     risk_data = calculate_stop_and_target(indicators, signal)
@@ -238,11 +290,30 @@ def generate_signal(
     except Exception as e:
         logger.warning("Hedef hesaplama hatası [%s]: %s", symbol, str(e))
 
+    # ── Vade bazlı tutma önerisi ──
+    horizon = None
+    try:
+        horizon = build_technical_horizon_guidance(
+            tf_signals, tgt, indicators, score, market_regime,
+        )
+    except Exception as e:
+        logger.warning("Vade önerisi hatası [%s]: %s", symbol, str(e))
+
+    # ── Vade bazlı skorlar (kısa/swing/orta/uzun) ──
+    horizon_scores: Optional[HorizonScoreSet] = None
+    if df is not None:
+        try:
+            beta = float(indicators.get("beta", 1.0) or 1.0)
+            horizon_scores = calculate_horizon_score_set(df, market_regime, beta)
+        except Exception as e:
+            logger.warning("Vade skorlama hatası [%s]: %s", symbol, str(e))
+
     # ── Yorum ──
     comm = Commentary()
     try:
         comm = generate_commentary(
             symbol, signal, score, indicators, fib, candles, ew, tgt,
+            timeframes=tf_signals, horizon=horizon,
         )
     except Exception as e:
         logger.warning("Yorum hatası [%s]: %s", symbol, str(e))
@@ -272,6 +343,9 @@ def generate_signal(
         targets=tgt,
         commentary=comm,
         summary=comm.summary,
+        horizon_guidance=horizon,
+        reason_factors=reason_factors,
+        horizon_scores=horizon_scores,
     )
 
 

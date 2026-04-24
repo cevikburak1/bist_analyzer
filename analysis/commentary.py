@@ -7,11 +7,14 @@ API gerektirmez — tamamen deterministik, anlık.
 
 import logging
 from dataclasses import dataclass, field
+from typing import Optional
 
 from analysis.fibonacci import FibonacciResult
 from analysis.candle_patterns import CandlePattern, pattern_bias, patterns_summary
 from analysis.elliott_wave import ElliottWaveResult
 from analysis.targets import TargetLevels
+from analysis.timeframes import TimeframeSignals
+from analysis.horizon_guidance import TechnicalHorizonGuidance
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +245,50 @@ def _build_risks(
     return risks
 
 
+def _timeframe_alignment_sentence(tf: Optional[TimeframeSignals]) -> str:
+    """Zaman dilimi sinyallerinin hizalanmasını cümleye çevir."""
+    if tf is None:
+        return ""
+    parts: list[str] = []
+    parts.append(f"günlük {tf.daily}")
+    if tf.weekly:
+        parts.append(f"haftalık {tf.weekly}")
+    if tf.monthly:
+        parts.append(f"aylık {tf.monthly}")
+    if tf.yearly:
+        parts.append(f"yıllık {tf.yearly}")
+    if not parts:
+        return ""
+
+    signals = [tf.daily, tf.weekly, tf.monthly, tf.yearly]
+    non_empty = [s for s in signals if s]
+    if not non_empty:
+        return ""
+
+    distinct = set(non_empty)
+    if len(distinct) == 1:
+        verdict = next(iter(distinct))
+        if verdict == "AL":
+            tone = "tüm zaman dilimleri AL ile hizalı - güçlü teyit"
+        elif verdict == "SAT":
+            tone = "tüm zaman dilimleri SAT ile hizalı - geniş tabanlı zayıflık"
+        else:
+            tone = "tüm zaman dilimleri BEKLE - belirsizlik"
+    else:
+        tone = "zaman dilimleri arasında uyuşmazlık var - vade bazlı planlama gerek"
+    return f"Zaman dilimi tablosu: {', '.join(parts)}; {tone}."
+
+
+def _horizon_sentence(horizon: Optional[TechnicalHorizonGuidance]) -> str:
+    if horizon is None:
+        return ""
+    return (
+        f"Vade önerileri → Kısa: {horizon.short.label} ({horizon.short.verdict}); "
+        f"Orta: {horizon.medium.label} ({horizon.medium.verdict}); "
+        f"Uzun: {horizon.long.label} ({horizon.long.verdict})."
+    )
+
+
 def generate_commentary(
     symbol: str,
     signal: str,
@@ -251,6 +298,9 @@ def generate_commentary(
     patterns: list[CandlePattern],
     ew: ElliottWaveResult,
     targets: TargetLevels,
+    *,
+    timeframes: Optional[TimeframeSignals] = None,
+    horizon: Optional[TechnicalHorizonGuidance] = None,
 ) -> Commentary:
     """
     Tüm göstergeleri sentezleyip profesyonel Türkçe yorum üretir.
@@ -283,6 +333,14 @@ def generate_commentary(
         targets_s = _targets_sentence(targets, close)
         if targets_s:
             sentences.append(targets_s)
+
+    tf_s = _timeframe_alignment_sentence(timeframes)
+    if tf_s:
+        sentences.append(tf_s)
+
+    horizon_s = _horizon_sentence(horizon)
+    if horizon_s:
+        sentences.append(horizon_s)
 
     paragraph = " ".join(sentences)
 

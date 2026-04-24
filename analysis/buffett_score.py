@@ -327,18 +327,32 @@ def score_valuation(
     else:
         details["p_fcf"] = None
 
-    # MoS
-    if intrinsic_value_per_share and current_price and intrinsic_value_per_share > 0:
-        mos = (intrinsic_value_per_share - current_price) / intrinsic_value_per_share
-        possible += 5
-        if mos >= MOS_TARGET:
-            earned += 5
-        elif mos >= 0.10:
-            earned += 3
-        elif mos >= 0:
-            earned += 1
-        details["margin_of_safety"] = round(mos, 4)
-        details["intrinsic_value"] = round(intrinsic_value_per_share, 4)
+    # MoS - intrinsic vs price arasındaki büyüklük farkı 100x üstüyse
+    # veri bütünlüğü şüpheli kabul edilir ve MoS skorlamaya katılmaz.
+    if (
+        intrinsic_value_per_share
+        and current_price
+        and intrinsic_value_per_share > 0
+        and current_price > 0
+    ):
+        ratio = intrinsic_value_per_share / current_price
+        if ratio > 100 or ratio < 0.01:
+            details["margin_of_safety"] = None
+            details["intrinsic_value"] = round(intrinsic_value_per_share, 4)
+            details["margin_of_safety_anomaly"] = (
+                f"Intrinsic/fiyat oranı {ratio:.1f}x - veri bütünlüğü şüpheli, MoS atlandı"
+            )
+        else:
+            mos = (intrinsic_value_per_share - current_price) / intrinsic_value_per_share
+            possible += 5
+            if mos >= MOS_TARGET:
+                earned += 5
+            elif mos >= 0.10:
+                earned += 3
+            elif mos >= 0:
+                earned += 1
+            details["margin_of_safety"] = round(mos, 4)
+            details["intrinsic_value"] = round(intrinsic_value_per_share, 4)
     else:
         details["margin_of_safety"] = None
         details["intrinsic_value"] = None

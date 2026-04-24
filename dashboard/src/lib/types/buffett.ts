@@ -34,7 +34,11 @@ export type BuffettListItem = {
   margin_of_safety: number | null;
   holding_recommendation: string;
   warnings_count: number;
+  classification_reason?: string;
   key_metrics: BuffettKeyMetrics;
+  horizon_short?: string | null;
+  horizon_medium?: string | null;
+  horizon_long?: string | null;
 };
 
 export type BuffettListSummary = {
@@ -80,6 +84,27 @@ export type BuffettIntrinsic = {
   reason: string;
 };
 
+export type BuffettClassificationFactor = {
+  rule: string;
+  status: string;
+  detail: string;
+};
+
+export type BuffettHorizonVerdict = {
+  verdict: string;
+  label: string;
+  color: string;
+  reason: string;
+  factors: string[];
+};
+
+export type BuffettHorizonGuidance = {
+  short: BuffettHorizonVerdict;
+  medium: BuffettHorizonVerdict;
+  long: BuffettHorizonVerdict;
+  overall: string;
+};
+
 export type BuffettSignalBlock = {
   symbol: string;
   label_key: string;
@@ -89,6 +114,9 @@ export type BuffettSignalBlock = {
   margin_of_safety: number | null;
   holding_recommendation: string;
   warnings: string[];
+  classification_reason: string;
+  classification_factors: BuffettClassificationFactor[];
+  horizon_guidance: BuffettHorizonGuidance | null;
 };
 
 export type BuffettHistoryPoint = {

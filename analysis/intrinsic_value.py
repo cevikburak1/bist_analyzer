@@ -103,15 +103,37 @@ def _fcf_history(bundle: FundamentalsBundle, years: int) -> list[float]:
 
 
 def _shares_outstanding(bundle: FundamentalsBundle) -> Optional[float]:
-    """Önce balance sheet, sonra info."""
+    """Hisse adedini bul. Bilanço fallback'i bazen 'Common Stock' satırını döner;
+    bu rakam yfinance'te par değer olabildiği için info ile çapraz kontrol yapar.
+
+    Strateji:
+    - Önce info["sharesOutstanding"] (en güvenilir kaynak) varsa onu baz al.
+    - Bilanço değeri ile arasında 10x'ten fazla fark yoksa bilanço daha taze
+      olabilir; ona güven.
+    - Aksi halde info değerini koru.
+    - Hiçbiri yoksa son çare bilanço değeri.
+    """
+    info_shares = bundle.info.get("sharesOutstanding")
+    info_val: Optional[float] = float(info_shares) if info_shares and info_shares > 0 else None
+
+    bs_val: Optional[float] = None
     for bal in reversed(bundle.balance_annual):
         s = bal.get("shares_outstanding")
         if s is not None and s > 0:
-            return float(s)
-    s = bundle.info.get("sharesOutstanding")
-    if s and s > 0:
-        return float(s)
-    return None
+            bs_val = float(s)
+            break
+
+    if info_val is None and bs_val is None:
+        return None
+    if info_val is None:
+        return bs_val
+    if bs_val is None:
+        return info_val
+
+    ratio = bs_val / info_val if info_val > 0 else 0.0
+    if 0.1 <= ratio <= 10:
+        return bs_val
+    return info_val
 
 
 def calculate_intrinsic_value(
@@ -184,6 +206,38 @@ def calculate_intrinsic_value(
         )
 
     intrinsic = enterprise_value / shares
+
+    # Sağlıklılık kontrolü: intrinsic ile mevcut fiyat arasında 100x üstü
+    # büyüklük farkı varsa veri (özellikle hisse adedi veya FCF birimi)
+    # neredeyse her zaman bozuktur. Bu durumda MoS hesaplamak yanıltıcı bir
+    # %-X.XXX değeri ürettiği için modeli N/A olarak işaretliyoruz.
+    if current_price and current_price > 0 and intrinsic > 0:
+        ratio = intrinsic / current_price
+        if ratio > 100 or ratio < 0.01:
+            inverse = 1.0 / ratio if ratio > 0 else 0.0
+            if ratio > 1:
+                gap_text = f"{ratio:.0f}x daha büyük"
+            else:
+                gap_text = f"{inverse:.0f}x daha küçük"
+            return IntrinsicValueResult(
+                intrinsic_value_per_share=round(intrinsic, 4),
+                enterprise_value=enterprise_value,
+                base_fcf=base_fcf,
+                growth_used=growth,
+                discount_rate=a.discount_rate,
+                terminal_growth=a.terminal_growth,
+                projection_years=a.projection_years,
+                shares_outstanding=shares,
+                margin_of_safety=None,
+                current_price=current_price,
+                is_na=True,
+                reason=(
+                    f"Adil değer ({intrinsic:.4f}) mevcut fiyat ({current_price:.2f}) ile "
+                    f"karşılaştırıldığında {gap_text} - hisse adedi veya FCF birim eşleşmesi "
+                    "şüpheli, MoS güvenilir değil"
+                ),
+            )
+
     mos: Optional[float] = None
     if current_price and intrinsic > 0:
         mos = (intrinsic - current_price) / intrinsic

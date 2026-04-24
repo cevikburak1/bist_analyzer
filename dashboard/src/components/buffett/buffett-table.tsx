@@ -6,7 +6,7 @@ import { ArrowDownAZ, ArrowUpAZ, ChevronLeft, ChevronRight, Search } from "lucid
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatPrice } from "@/lib/formatters";
+import { describeRatioPercent, formatPrice } from "@/lib/formatters";
 import { LabelPill } from "@/components/buffett/label-pill";
 import type { BuffettListItem } from "@/lib/types/buffett";
 
@@ -39,8 +39,7 @@ const SECTOR_OPTIONS: { value: string; label: string }[] = [
 ];
 
 function formatPct(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "-";
-  return `${(value * 100).toFixed(1)}%`;
+  return describeRatioPercent(value).label;
 }
 
 function formatScore(value: number) {
@@ -219,7 +218,13 @@ export function BuffettTable({ items }: Props) {
                     <LabelPill color={it.color} label={it.label} />
                   </TableCell>
                   <TableCell className="text-right font-semibold text-slate-100">{formatScore(it.score)}</TableCell>
-                  <TableCell className={`text-right font-medium ${it.margin_of_safety && it.margin_of_safety >= 0.30 ? "text-emerald-300" : "text-slate-300"}`}>
+                  <TableCell className={`text-right font-medium ${
+                    describeRatioPercent(it.margin_of_safety).isAnomaly
+                      ? "text-amber-300"
+                      : it.margin_of_safety && it.margin_of_safety >= 0.30
+                        ? "text-emerald-300"
+                        : "text-slate-300"
+                  }`}>
                     {formatPct(it.margin_of_safety)}
                   </TableCell>
                   <TableCell className="text-right text-slate-300">
