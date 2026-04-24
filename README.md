@@ -1,115 +1,159 @@
-# BIST Hisse Senedi Analiz ve Sinyal Sistemi
+<div align="center">
 
-Borsa Istanbul (BIST) paylarını teknik analiz ile değerlendiren,
-0-100 arası skorlayan ve AL/SAT/BEKLE sinyali üreten Python tabanlı analiz sistemi.
+# 📈 BIST Hisse Senedi Analiz ve Sinyal Sistemi
 
-## Özellikler
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-- **Geniş Sembol Evreni**: `data/symbols.txt` içindeki repo-committed BIST pay listesini analiz eder
-- **Otomatik Veri Çekme**: yfinance ile seçili BIST paylarının günlük OHLCV verilerini indirir
-- **5 Kategorili Skorlama**: Trend, Momentum, Hacim, Fiyat Pozisyonu, Piyasa Uyumu
-- **Akıllı Sinyal Sistemi**: Çok faktörlü AL/SAT/BEKLE kararları
-- **Piyasa Rejimi Tespiti**: XU100 bazlı yükseliş/düşüş/yatay rejim analizi
-- **Çoklu Rapor Formatları**: Terminal (Rich), PNG (Matplotlib), HTML (Plotly), CSV, JSON
+Borsa İstanbul (BIST) paylarını gelişmiş teknik analiz yöntemleriyle değerlendiren, 0-100 arası skorlayan ve çok faktörlü **AL/SAT/BEKLE** sinyalleri üreten kapsamlı analiz sistemi ve modern web arayüzü.
 
-## Kurulum
+[Özellikler](#-özellikler) • [Kurulum](#-kurulum) • [Kullanım](#-kullanım) • [Skorlama Sistemi](#-skorlama-sistemi) • [Dashboard](#-web-dashboard)
+
+</div>
+
+---
+
+## 🌟 Özellikler
+
+- **Geniş Sembol Evreni**: `data/symbols.txt` içindeki BIST pay listesini otomatik analiz eder.
+- **Otomatik Veri Çekme**: `yfinance` entegrasyonu ile günlük OHLCV verilerini indirir ve önbellekler.
+- **Gelişmiş Teknik Analiz**: SMA, RSI, MACD, Bollinger Bantları, OBV, Fibonacci Seviyeleri, Elliott Dalga Teorisi ve Mum Formasyonları.
+- **5 Kategorili Skorlama Motoru**: Trend, Momentum, Hacim, Fiyat Pozisyonu ve Piyasa Uyumu (Beta) metriklerini harmanlayarak 0-100 arası skor üretir.
+- **Akıllı Sinyal Sistemi**: Çok faktörlü kurallarla AL/SAT/BEKLE kararları verir.
+- **Piyasa Rejimi Tespiti**: XU100 endeksine dayalı yükseliş/düşüş/yatay rejim analizi (Düşüş rejiminde riskli sinyaller filtrelenir).
+- **Çoklu Rapor Formatları**:
+  - 🖥️ **Terminal**: `Rich` kütüphanesi ile renkli ve okunabilir CLI çıktısı
+  - 📊 **Görsel**: `Matplotlib` ile PNG formatında tablo ve grafikler
+  - 🌐 **İnteraktif**: `Plotly` ile HTML raporlar
+  - 💾 **Veri**: Entegrasyonlar için CSV ve JSON çıktıları
+- **Modern Web Dashboard**: Analiz sonuçlarını görselleştiren, Next.js tabanlı şık kullanıcı arayüzü.
+
+## 🚀 Kurulum
+
+### Gereksinimler
+- Python 3.10 veya üzeri
+- Node.js 18+ (Dashboard için)
+
+### Adımlar
+
+1. **Projeyi Klonlayın**
+   ```bash
+   git clone https://github.com/kullaniciadi/bist_analyzer.git
+   cd bist_analyzer
+   ```
+
+2. **Python Bağımlılıklarını Yükleyin**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Dashboard Bağımlılıklarını Yükleyin (Opsiyonel)**
+   ```bash
+   cd dashboard
+   npm install
+   cd ..
+   ```
+
+## 💻 Kullanım
+
+Sistemi çalıştırmak için `main.py` dosyasını kullanabilirsiniz. Çeşitli parametrelerle analizi özelleştirebilirsiniz:
 
 ```bash
-cd bist_analyzer
-pip install -r requirements.txt
-```
-
-## Kullanım
-
-```bash
-# Repo içindeki tam BIST pay listesini analiz et
+# Tüm BIST pay listesini analiz et
 python main.py
 
-# Belirli hisseleri analiz et
+# Sadece belirli hisseleri analiz et
 python main.py --symbols THYAO ASELS KCHOL FROTO
 
-# Sessiz mod (terminal çıktısı yok, sadece dosyalar)
+# Analiz bittikten sonra React Dashboard'u otomatik başlat
+python main.py --dashboard
+
+# Sessiz mod (Terminal çıktısı vermez, sadece dosyaları oluşturur)
 python main.py --quiet
 
-# PNG grafik oluşturma
+# PNG grafik veya HTML rapor oluşturmayı devre dışı bırak
 python main.py --no-charts
-
-# HTML rapor oluşturma
 python main.py --no-html
 
-# Cache'i yoksay, tüm verileri yeniden indir
+# Önbelleği (cache) yoksay ve tüm verileri baştan indir
 python main.py --force-download
-
-# Analizden sonra React dashboard'u başlat
-python main.py --dashboard
 ```
 
-Varsayılan sembol evreni `data/symbols.txt` dosyasından yüklenir. Dosya, repo içinde tutulan geniş BIST pay listesidir; isterseniz bu listeyi doğrudan düzenleyebilir veya çalıştırma anında `--symbols` ile daraltabilirsiniz.
+## 🧠 Skorlama Sistemi
 
-## Skorlama Sistemi
+Her hisse senedi 5 ana kategoride değerlendirilir ve maksimum 100 puan üzerinden skorlanır:
 
 | Kategori | Maks Puan | Kriterler |
 |----------|-----------|-----------|
-| Trend Analizi | 25 | Fiyat vs SMA50/200, Golden Cross, Regresyon eğimi |
-| Momentum | 25 | RSI ideal bölge, MACD durumu |
-| Hacim | 20 | Hacim ortalaması, OBV trendi |
-| Fiyat Pozisyonu | 15 | 52-hafta pozisyonu, Bollinger bantları |
-| Piyasa Uyumu | 15 | XU100 performansı, Beta |
+| **Trend Analizi** | 25 | Fiyat vs SMA50/200, Golden Cross durumu, Regresyon eğimi |
+| **Momentum** | 25 | RSI ideal bölgesi, MACD kesişimleri ve gücü |
+| **Hacim** | 20 | Hacim ortalaması kıyaslaması, OBV (On-Balance Volume) trendi |
+| **Fiyat Pozisyonu** | 15 | 52-haftalık zirve/dip pozisyonu, Bollinger bantları konumu |
+| **Piyasa Uyumu** | 15 | XU100 endeksine göre göreceli performans, Beta katsayısı |
 
-## Sinyal Kuralları
+## 🎯 Sinyal Kuralları
 
-**AL**: Skor >= 65, RSI 30-70, fiyat > 200 SMA, hacim >= 1.2x ortalama
+Sistem, hesaplanan skor ve teknik göstergelere dayanarak aşağıdaki kurallarla sinyal üretir:
 
-**SAT**: Skor <= 35 VEYA (RSI > 75 + BB üst kırılımı) VEYA (MACD negatif + SMA50 altı)
+- 🟢 **AL**: Skor >= 65, RSI 30-70 arası, Fiyat > 200 SMA, Hacim >= 1.2x ortalama
+- 🔴 **SAT**: Skor <= 35 **VEYA** (RSI > 75 + Bollinger üst bant kırılımı) **VEYA** (MACD negatif + SMA50 altı)
+- ⚪ **BEKLE**: Diğer tüm durumlar
 
-**BEKLE**: Diğer tüm durumlar
+> ⚠️ **Not:** Piyasa rejimi "Düşüş" (Bear Market) olarak tespit edilirse, AL sinyalleri için kriterler otomatik olarak zorlaştırılır veya filtrelenir.
 
-> Düşüş rejiminde AL sinyalleri otomatik olarak filtrelenir.
+## 🖥️ Web Dashboard
 
-## Çıktılar
+Proje, analiz sonuçlarını modern bir arayüzde inceleyebileceğiniz bir Next.js dashboard içerir.
 
-| Dosya | Konum | Açıklama |
-|-------|-------|----------|
-| Terminal raporu | stdout | Rich ile renkli tablo |
-| Tablo PNG | `output/bist_table_YYYYMMDD.png` | Formatlı tablo görseli |
-| Grafik PNG | `output/bist_charts_YYYYMMDD.png` | AL sinyalli hisse grafikleri |
-| İnteraktif HTML | `output/bist_interactive_YYYYMMDD.html` | Plotly interaktif rapor |
-| CSV | `output/signals_YYYYMMDD.csv` | Tüm sinyal verileri |
-| JSON | `output/signals_YYYYMMDD.json` | API uyumlu format |
+Dashboard'u başlatmak için:
+```bash
+# Analiz ile birlikte başlatmak için:
+python main.py --dashboard
 
-## Proje Yapısı
-
+# Veya manuel olarak başlatmak için:
+cd dashboard
+npm run dev
 ```
+Tarayıcınızda `http://localhost:3000` adresine giderek arayüze erişebilirsiniz.
+
+## 📁 Proje Yapısı
+
+```text
 bist_analyzer/
-├── main.py                  # Ana çalıştırma ve CLI
-├── config.py                # Merkezi ayarlar
+├── main.py                  # Ana orkestrasyon ve CLI giriş noktası
+├── config.py                # Merkezi yapılandırma ayarları
 ├── data/
-│   ├── downloader.py        # yfinance veri indirme + cache
-│   ├── symbols.txt          # Repo-committed BIST pay listesi
-│   └── cache/               # Parquet cache dosyaları
+│   ├── downloader.py        # yfinance entegrasyonu ve önbellekleme
+│   └── symbols.txt          # Analiz edilecek BIST pay listesi
 ├── analysis/
-│   ├── indicators.py        # Teknik göstergeler (SMA, RSI, MACD, BB, OBV)
+│   ├── indicators.py        # Teknik gösterge hesaplamaları
 │   ├── scoring.py           # 5 kategorili skorlama motoru
-│   ├── signals.py           # AL/SAT/BEKLE sinyal mantığı
-│   └── market_regime.py     # Piyasa rejimi tespiti
-├── reports/
-│   ├── terminal_report.py   # Rich terminal raporu
-│   ├── chart_report.py      # Matplotlib PNG grafikleri
-│   └── html_report.py       # Plotly interaktif HTML
-├── output/                  # Rapor çıktıları
-├── logs/                    # Hata logları
-└── requirements.txt
+│   ├── signals.py           # Sinyal üretim mantığı
+│   ├── candle_patterns.py   # Mum formasyonları tespiti
+│   └── market_regime.py     # XU100 tabanlı piyasa rejimi analizi
+├── reports/                 # Terminal, PNG, HTML ve JSON/CSV raporlayıcıları
+├── dashboard/               # Next.js tabanlı web arayüzü
+├── output/                  # Üretilen rapor ve veri çıktıları
+└── logs/                    # Sistem logları
 ```
 
-## Yapılandırma
+## ⚙️ Yapılandırma
 
-`config.py` dosyasından tüm parametreler ayarlanabilir:
-- Skor eşikleri (AL: 65, SAT: 35)
+`config.py` dosyası üzerinden sistemin davranışını tamamen özelleştirebilirsiniz:
+- Sinyal eşikleri (Örn: AL için min skor: 65)
 - İndikatör periyotları (RSI: 14, SMA: 50/200)
 - Hacim çarpanı (1.2x)
-- Rate limiting süresi
+- Rate limiting ve önbellek süreleri
 
-## Uyarı
+## ⚠️ Yasal Uyarı
 
-Bu sistem yatırım tavsiyesi vermez. Tüm analizler tamamen teknik veriye dayanır.
-Yatırım kararlarınızı kendi araştırmanıza dayandırın.
+Bu yazılım **kesinlikle yatırım tavsiyesi vermez**. Üretilen tüm sinyaller, skorlar ve analizler tamamen matematiksel formüllere ve geçmiş fiyat verilerine dayalı teknik göstergelerdir. 
+
+Finansal piyasalarda işlem yapmak yüksek risk içerir. Yatırım kararlarınızı almadan önce kendi araştırmanızı yapmalı ve profesyonel bir finansal danışmandan destek almalısınız. Bu yazılımın kullanımından doğabilecek herhangi bir maddi kayıptan geliştiriciler sorumlu tutulamaz.
+
+---
+<div align="center">
+<i>Bu proje <a href="https://cursor.sh">Cursor</a> ile geliştirilmiştir.</i>
+</div>
