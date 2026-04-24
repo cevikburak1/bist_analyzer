@@ -154,6 +154,3 @@ Bu yazılım **kesinlikle yatırım tavsiyesi vermez**. Üretilen tüm sinyaller
 Finansal piyasalarda işlem yapmak yüksek risk içerir. Yatırım kararlarınızı almadan önce kendi araştırmanızı yapmalı ve profesyonel bir finansal danışmandan destek almalısınız. Bu yazılımın kullanımından doğabilecek herhangi bir maddi kayıptan geliştiriciler sorumlu tutulamaz.
 
 ---
-<div align="center">
-<i>Bu proje <a href="https://cursor.sh">Cursor</a> ile geliştirilmiştir.</i>
-</div>
