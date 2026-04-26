@@ -17,6 +17,9 @@ import yfinance as yf
 from config import (
     CACHE_DIR,
     DATA_PERIOD,
+    INTRADAY_CACHE_DIR,
+    INTRADAY_INTERVAL,
+    INTRADAY_PERIOD,
     REQUEST_DELAY,
     SYMBOLS_FILE,
 )
@@ -45,9 +48,21 @@ def _cache_path(symbol: str, today: str) -> Path:
     return CACHE_DIR / f"{symbol}_{today}.parquet"
 
 
+def _intraday_cache_path(symbol: str, interval: str, today: str) -> Path:
+    safe_interval = interval.replace("/", "_")
+    return INTRADAY_CACHE_DIR / f"{symbol}_{safe_interval}_{today}.parquet"
+
+
 def _clean_old_cache(symbol: str, today: str) -> None:
     """Aynı sembolün eski cache dosyalarını temizler."""
     for old_file in CACHE_DIR.glob(f"{symbol}_*.parquet"):
+        if today not in old_file.name:
+            old_file.unlink(missing_ok=True)
+
+
+def _clean_old_intraday_cache(symbol: str, interval: str, today: str) -> None:
+    safe_interval = interval.replace("/", "_")
+    for old_file in INTRADAY_CACHE_DIR.glob(f"{symbol}_{safe_interval}_*.parquet"):
         if today not in old_file.name:
             old_file.unlink(missing_ok=True)
 
@@ -106,6 +121,53 @@ def download_stock(
 
     except Exception as e:
         logger.error("İndirme hatası [%s]: %s", yahoo_symbol, str(e))
+        return None
+
+
+def download_intraday_stock(
+    symbol: str,
+    period: str = INTRADAY_PERIOD,
+    interval: str = INTRADAY_INTERVAL,
+    force: bool = False,
+) -> Optional[pd.DataFrame]:
+    """
+    Tek bir hissenin intraday OHLCV verisini indirir veya cache'ten okur.
+    AMD modeli günlük sinyal hattından ayrı bir LTF veri penceresi kullanır.
+    """
+    yahoo_symbol = f"{symbol}.IS"
+    today = date.today().strftime("%Y%m%d")
+    cache_file = _intraday_cache_path(symbol, interval, today)
+
+    if not force and cache_file.exists():
+        try:
+            df = pd.read_parquet(cache_file)
+            if len(df) > 0:
+                logger.debug("Intraday cache'ten okundu: %s %s (%d satır)", symbol, interval, len(df))
+                return df
+        except Exception:
+            logger.warning("Intraday cache okunamadı, yeniden indiriliyor: %s", symbol)
+
+    try:
+        ticker = yf.Ticker(yahoo_symbol)
+        df = ticker.history(period=period, interval=interval, auto_adjust=True)
+
+        if df is None or df.empty:
+            logger.warning("Intraday veri bulunamadı: %s %s", yahoo_symbol, interval)
+            return None
+
+        df.columns = [c.lower().replace(" ", "_") for c in df.columns]
+        keep_cols = ["open", "high", "low", "close", "volume"]
+        df = df[[c for c in keep_cols if c in df.columns]]
+        df.index = pd.to_datetime(df.index).tz_localize(None)
+
+        _clean_old_intraday_cache(symbol, interval, today)
+        df.to_parquet(cache_file)
+
+        logger.info("Intraday indirildi: %s %s (%d satır)", symbol, interval, len(df))
+        return df
+
+    except Exception as e:
+        logger.error("Intraday indirme hatası [%s %s]: %s", yahoo_symbol, interval, str(e))
         return None
 
 

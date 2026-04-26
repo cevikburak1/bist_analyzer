@@ -31,6 +31,9 @@ BUFFETT_LOCK_PATH = WEB_BUFFETT_DIR / "buffett.lock"
 
 # ── Veri Çekme ───────────────────────────────────────────────────────────────
 DATA_PERIOD = "2y"              # yfinance period parametresi (aylık/yıllık sinyaller için 2 yıl)
+INTRADAY_CACHE_DIR = CACHE_DIR / "intraday"
+INTRADAY_PERIOD = "60d"         # yfinance intraday retention sınırlarına uygun AMD penceresi
+INTRADAY_INTERVAL = "60m"       # AMD/CISD için varsayılan LTF bar aralığı
 REQUEST_DELAY = 0.3             # yfinance çağrıları arasında bekleme (saniye)
 MAX_WORKERS = 4                 # Paralel indirme thread sayısı
 
@@ -85,6 +88,7 @@ MARKET_REGIME_PERIOD = 20       # Son N günlük performans penceresi
 MAX_BUY_SIGNALS_IN_CHART = 12   # PNG grafikte gösterilecek maks AL sinyali
 REPORT_DATE_FORMAT = "%Y%m%d"
 WEB_SERIES_LENGTH = 120
+WEB_INTRADAY_SERIES_LENGTH = 180
 INTRADAY_REFRESH_MINUTES = 15
 
 # ── Loglama ──────────────────────────────────────────────────────────────────
@@ -94,6 +98,7 @@ LOG_LEVEL = "INFO"
 # Gerekli dizinleri oluştur
 for d in [
     CACHE_DIR,
+    INTRADAY_CACHE_DIR,
     OUTPUT_DIR,
     LOG_DIR,
     WEB_OUTPUT_DIR,

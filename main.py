@@ -40,7 +40,7 @@ from config import (
     MARKET_INDEX_SYMBOL,
     REPORT_DATE_FORMAT,
 )
-from data.downloader import load_symbols, download_stock
+from data.downloader import load_symbols, download_stock, download_intraday_stock
 from data.tradingview import fetch_tradingview_snapshots
 from analysis.indicators import (
     calculate_all_indicators,
@@ -214,7 +214,7 @@ def run_pipeline(
     args: argparse.Namespace,
     logger: logging.Logger,
     symbols: list[str],
-) -> tuple[list[Signal], MarketRegime, dict[str, pd.DataFrame]]:
+) -> tuple[list[Signal], MarketRegime, dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
     if not args.quiet:
         console.print("\n[bold cyan]━━━ BIST Hisse Senedi Analiz Sistemi ━━━[/bold cyan]\n")
 
@@ -267,11 +267,36 @@ def run_pipeline(
         console.print("[red]HATA: Hiçbir hisse verisi alınamadı![/red]")
         sys.exit(1)
 
+    # ── 3b. Intraday Veri İndirme (AMD Model) ─────────────────────────
+    if not args.quiet:
+        console.print("\n[cyan]▸ AMD intraday verileri indiriliyor...[/cyan]")
+
+    stock_intraday_raw: dict[str, pd.DataFrame] = {}
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total}"),
+        TimeElapsedColumn(),
+        console=console,
+        disable=args.quiet,
+    ) as progress:
+        task = progress.add_task("Intraday veriler indiriliyor", total=len(stock_data_raw))
+        for symbol in stock_data_raw:
+            intraday_df = download_intraday_stock(symbol, force=args.force_download)
+            if intraday_df is not None and not intraday_df.empty:
+                stock_intraday_raw[symbol] = intraday_df
+            progress.update(task, advance=1, description=f"[cyan]{symbol} intraday[/cyan]")
+
+    if not args.quiet:
+        console.print(f"  ✓ {len(stock_intraday_raw)}/{len(stock_data_raw)} hisse için intraday veri alındı")
+
     # ── 4. İndikatör Hesaplama ───────────────────────────────────────
     if not args.quiet:
         console.print("\n[cyan]▸ Teknik göstergeler hesaplanıyor...[/cyan]")
 
     stock_data: dict[str, pd.DataFrame] = {}
+    stock_intraday: dict[str, pd.DataFrame] = {}
     all_indicators: dict[str, dict] = {}
 
     for symbol, df in stock_data_raw.items():
@@ -288,6 +313,12 @@ def run_pipeline(
         except Exception as e:
             logger.error("İndikatör hatası [%s]: %s", symbol, str(e))
             continue
+
+    for symbol, df in stock_intraday_raw.items():
+        try:
+            stock_intraday[symbol] = calculate_all_indicators(df)
+        except Exception as e:
+            logger.warning("Intraday indikatör hatası [%s]: %s", symbol, str(e))
 
     if not args.quiet:
         console.print(f"  ✓ {len(all_indicators)} hisse için göstergeler hesaplandı")
@@ -332,6 +363,7 @@ def run_pipeline(
                 all_scores[symbol],
                 regime,
                 df=stock_data.get(symbol),
+                intraday_df=stock_intraday.get(symbol),
             )
             signals.append(sig)
         except Exception as e:
@@ -347,7 +379,7 @@ def run_pipeline(
                        f"([green]{al_count} AL[/green] / "
                        f"[red]{sat_count} SAT[/red])")
 
-    return signals, regime, stock_data
+    return signals, regime, stock_data, stock_intraday
 
 
 def generate_reports(
@@ -355,6 +387,7 @@ def generate_reports(
     signals: list[Signal],
     regime: MarketRegime,
     stock_data: dict[str, pd.DataFrame],
+    stock_intraday: dict[str, pd.DataFrame],
     requested_symbols: int,
 ) -> None:
 
@@ -371,6 +404,7 @@ def generate_reports(
     web_snapshot_path = save_web_snapshot(
         signals,
         stock_data,
+        stock_intraday,
         regime,
         requested_symbols=requested_symbols,
     )
@@ -458,12 +492,13 @@ def main() -> None:
     exit_code = 0
     # Bitiş
     try:
-        signals, regime, stock_data = run_pipeline(args, logger, symbols)
+        signals, regime, stock_data, stock_intraday = run_pipeline(args, logger, symbols)
         generate_reports(
             args,
             signals,
             regime,
             stock_data,
+            stock_intraday,
             requested_symbols=len(symbols),
         )
         finished_at = datetime.now().isoformat()

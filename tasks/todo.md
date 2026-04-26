@@ -25,5 +25,13 @@
 - [x] Teknik Analiz sayfasına adil değer, iskonto/prim kolonları ve sorting eklendi.
 - [x] ANKA v2, ANKA Motor, Cup Handle, Adil Değer ve Sessiz Toplama liste sayfalarına pagination ve alan bazlı sorting eklendi.
 
+## AMD Model Engine
+- [x] Plan onaylandıktan sonra uygulanabilir checklist oluşturuldu.
+- [x] Intraday downloader, cache ve pipeline veri akışını ekle.
+- [x] AMD/CISD/sweep/projection analiz motorunu oluştur ve sinyal payload’una bağla.
+- [x] Web snapshot, TypeScript tipleri ve detay intraday serisini genişlet.
+- [x] AMD liste ve hisse detay sayfalarını mevcut dashboard desenleriyle ekle.
+- [x] Python küçük sembol analizi, JSON kontrolü, lint/build ve browser doğrulaması çalıştır.
+
 ## İnceleme
-- Uygulama henüz devam ediyor.
+- AMD Model Engine için intraday yfinance/cache hattı, Python AMD motoru, web snapshot alanları ve `/amd-model` + `/amd-model/[symbol]` dashboard sayfaları eklendi. `python main.py --symbols THYAO ASELS --force-download --no-html --no-charts`, AMD JSON kontrolü, `npm run lint`, `npm run build` ve route HTTP kontrolleri geçti.

@@ -23,6 +23,7 @@ from config import (
     ANALYSIS_STATUS_PATH,
     INTRADAY_REFRESH_MINUTES,
     LATEST_REPORT_PATH,
+    WEB_INTRADAY_SERIES_LENGTH,
     WEB_SERIES_LENGTH,
     WEB_STOCKS_DIR,
 )
@@ -145,6 +146,7 @@ def _build_signal_payload(sig: Signal) -> dict[str, Any]:
     comm = sig.commentary
     horizon = sig.horizon_guidance
     anka_v2 = sig.anka_v2
+    amd_model = sig.amd_model
 
     return {
         "symbol": sig.symbol,
@@ -226,6 +228,7 @@ def _build_signal_payload(sig: Signal) -> dict[str, Any]:
             sig.horizon_scores.as_dict() if sig.horizon_scores else None
         ),
         "anka_v2": anka_v2.as_dict() if anka_v2 else None,
+        "amd_model": amd_model.as_dict() if amd_model else None,
         "tradingview_snapshot": sig.tradingview_snapshot,
         "cup_handle_quality": (
             sig.cup_handle_quality.as_dict() if sig.cup_handle_quality else None
@@ -268,9 +271,27 @@ def _build_series_payload(df: pd.DataFrame) -> list[dict[str, Any]]:
     return series
 
 
+def _build_intraday_series_payload(df: pd.DataFrame | None) -> list[dict[str, Any]]:
+    if df is None or df.empty:
+        return []
+
+    series = []
+    columns = ["open", "high", "low", "close", "volume", "atr", "rsi"]
+    recent = df.tail(WEB_INTRADAY_SERIES_LENGTH)
+
+    for idx, row in recent.iterrows():
+        item = {"date": pd.to_datetime(idx).isoformat()}
+        for col in columns:
+            item[col] = _safe_json_value(row[col]) if col in recent.columns else None
+        series.append(item)
+
+    return series
+
+
 def save_web_snapshot(
     signals: list[Signal],
     stock_data: dict[str, pd.DataFrame],
+    stock_intraday: dict[str, pd.DataFrame],
     regime: MarketRegime,
     *,
     requested_symbols: int,
@@ -302,6 +323,7 @@ def save_web_snapshot(
             "meta": latest_report["meta"],
             "signal": _build_signal_payload(sig),
             "series": _build_series_payload(stock_data.get(sig.symbol)),
+            "intraday_series": _build_intraday_series_payload(stock_intraday.get(sig.symbol)),
         }
         _atomic_write_json(WEB_STOCKS_DIR / f"{sig.symbol}.json", _normalize_json(stock_payload))
 

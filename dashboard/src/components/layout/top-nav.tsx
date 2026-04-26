@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Banknote, BrainCircuit, Flame, Landmark, LineChart, Radar, Trophy } from "lucide-react";
+import { Banknote, BrainCircuit, Flame, Landmark, LineChart, Radar, Target, Trophy } from "lucide-react";
 import { HORIZON_OPTIONS, useHorizon } from "@/lib/horizon-context";
 
 const ITEMS = [
@@ -12,6 +12,7 @@ const ITEMS = [
   { href: "/cup-handle-quality", label: "Cup Handle", icon: Trophy, match: (p: string) => p.startsWith("/cup-handle-quality") },
   { href: "/fair-value", label: "Adil Değer", icon: Banknote, match: (p: string) => p.startsWith("/fair-value") },
   { href: "/silent-accumulation", label: "Sessiz Toplama", icon: Radar, match: (p: string) => p.startsWith("/silent-accumulation") },
+  { href: "/amd-model", label: "AMD Model", icon: Target, match: (p: string) => p.startsWith("/amd-model") },
   { href: "/buffett", label: "Buffett (Temel)", icon: Landmark, match: (p: string) => p.startsWith("/buffett") },
 ];
 
@@ -26,7 +27,8 @@ export function TopNav() {
     !pathname.startsWith("/anka-engine") &&
     !pathname.startsWith("/cup-handle-quality") &&
     !pathname.startsWith("/fair-value") &&
-    !pathname.startsWith("/silent-accumulation");
+    !pathname.startsWith("/silent-accumulation") &&
+    !pathname.startsWith("/amd-model");
 
   return (
     <nav className="border-b border-slate-800 bg-slate-950/80 backdrop-blur">

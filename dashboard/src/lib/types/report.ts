@@ -284,6 +284,78 @@ export type CupHandleQuality = {
   params: Record<string, number | string | boolean>;
 };
 
+export type AmdRange = {
+  start_index: number;
+  end_index: number;
+  start_time: string;
+  end_time: string;
+  high: number;
+  low: number;
+  midpoint: number;
+};
+
+export type AmdSweep = {
+  direction: string;
+  index: number;
+  time: string;
+  price: number;
+  liquidity_pool: string;
+  rejection_pct: number;
+};
+
+export type AmdCisd = {
+  direction: string;
+  index: number | null;
+  time: string | null;
+  level: number;
+  confirmed: boolean;
+  range_high: number;
+  range_low: number;
+};
+
+export type AmdLiquidityLevel = {
+  start_index: number;
+  end_index: number;
+  start_time: string;
+  end_time: string;
+  price: number;
+};
+
+export type AmdKeyOpen = {
+  label: string;
+  time: string;
+  price: number;
+};
+
+export type AmdHtfSweep = {
+  direction: string;
+  time: string;
+  level: number;
+  swept_price: number;
+};
+
+export type AmdModel = {
+  status: string;
+  model_bias: string;
+  phase: string;
+  score: number;
+  timeframe: string;
+  interval: string;
+  summary: string;
+  accumulation: AmdRange | null;
+  manipulation: AmdRange | null;
+  distribution: AmdRange | null;
+  sweep: AmdSweep | null;
+  cisd: AmdCisd | null;
+  projections: Record<string, number>;
+  htf_sweep: AmdHtfSweep | null;
+  equal_highs: AmdLiquidityLevel[];
+  equal_lows: AmdLiquidityLevel[];
+  key_opens: AmdKeyOpen[];
+  alerts: string[];
+  params: Record<string, number | string | boolean | number[]>;
+};
+
 export type ReportSignal = {
   symbol: string;
   price: number;
@@ -313,6 +385,7 @@ export type ReportSignal = {
   horizon_guidance: HorizonGuidance | null;
   horizon_scores: HorizonScoreSet | null;
   anka_v2: AnkaV2Data | null;
+  amd_model: AmdModel | null;
   tradingview_snapshot: TradingViewSnapshot | null;
   cup_handle_quality: CupHandleQuality | null;
 };
@@ -346,12 +419,24 @@ export type StockSeriesPoint = {
   anka_is_ash_phase: boolean | null;
 };
 
+export type IntradaySeriesPoint = {
+  date: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
+  atr: number | null;
+  rsi: number | null;
+};
+
 export type StockDetailData = {
   generated_at: string;
   market_regime: MarketRegime;
   meta: ReportMeta;
   signal: ReportSignal;
   series: StockSeriesPoint[];
+  intraday_series: IntradaySeriesPoint[];
 };
 
 export type AnalysisStatus = {

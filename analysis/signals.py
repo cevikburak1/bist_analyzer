@@ -23,6 +23,7 @@ from analysis.elliott_wave import ElliottWaveResult, analyze_elliott_wave
 from analysis.targets import TargetLevels, calculate_targets
 from analysis.commentary import Commentary, generate_commentary
 from analysis.anka_v2 import AnkaV2Result, calculate_anka_v2
+from analysis.amd_model import AmdModelResult, calculate_amd_model
 from analysis.cup_handle import CupHandleQuality, calculate_cup_handle_quality
 from analysis.horizon_guidance import (
     TechnicalHorizonGuidance,
@@ -84,6 +85,7 @@ class Signal:
     horizon_scores: Optional[HorizonScoreSet] = None
     # ANKA v2.0 sentez analizi
     anka_v2: Optional[AnkaV2Result] = None
+    amd_model: Optional[AmdModelResult] = None
     tradingview_snapshot: Optional[dict] = None
     cup_handle_quality: Optional[CupHandleQuality] = None
 
@@ -160,6 +162,7 @@ def generate_signal(
     score_breakdown: ScoreBreakdown,
     market_regime: MarketRegime,
     df=None,
+    intraday_df=None,
 ) -> Signal:
     """
     Hisse için tam sinyal üretir: temel sinyal + fibonacci + mum formasyonları +
@@ -291,6 +294,14 @@ def generate_signal(
         except Exception as e:
             logger.warning("Cup and Handle hatası [%s]: %s", symbol, str(e))
 
+    # ── AMD Model (intraday Power of 3) ──
+    amd_model: Optional[AmdModelResult] = None
+    if intraday_df is not None:
+        try:
+            amd_model = calculate_amd_model(intraday_df)
+        except Exception as e:
+            logger.warning("AMD model hatası [%s]: %s", symbol, str(e))
+
     # ── Mum Formasyonları ──
     candles: list[CandlePattern] = []
     c_bias = "NONE"
@@ -374,6 +385,7 @@ def generate_signal(
         reason_factors=reason_factors,
         horizon_scores=horizon_scores,
         anka_v2=anka_v2,
+        amd_model=amd_model,
         tradingview_snapshot=indicators.get("tradingview_snapshot"),
         cup_handle_quality=cup_handle_quality,
     )
