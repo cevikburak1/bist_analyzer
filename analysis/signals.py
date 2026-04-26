@@ -22,6 +22,8 @@ from analysis.candle_patterns import CandlePattern, detect_all_patterns, pattern
 from analysis.elliott_wave import ElliottWaveResult, analyze_elliott_wave
 from analysis.targets import TargetLevels, calculate_targets
 from analysis.commentary import Commentary, generate_commentary
+from analysis.anka_v2 import AnkaV2Result, calculate_anka_v2
+from analysis.cup_handle import CupHandleQuality, calculate_cup_handle_quality
 from analysis.horizon_guidance import (
     TechnicalHorizonGuidance,
     build_technical_horizon_guidance,
@@ -80,6 +82,10 @@ class Signal:
     reason_factors: list[str] = field(default_factory=list)
     # Vade bazlı skorlar ve kararlar (short/swing/medium/long)
     horizon_scores: Optional[HorizonScoreSet] = None
+    # ANKA v2.0 sentez analizi
+    anka_v2: Optional[AnkaV2Result] = None
+    tradingview_snapshot: Optional[dict] = None
+    cup_handle_quality: Optional[CupHandleQuality] = None
 
 
 def _trend_label(indicators: dict) -> str:
@@ -264,6 +270,27 @@ def generate_signal(
         except Exception as e:
             logger.warning("Fibonacci hatası [%s]: %s", symbol, str(e))
 
+    # ── ANKA v2.0 sentez motoru ──
+    anka_v2: Optional[AnkaV2Result] = None
+    if df is not None:
+        try:
+            anka_v2 = calculate_anka_v2(
+                df,
+                base_score=score,
+                base_signal=signal,
+                fibonacci=fib,
+            )
+        except Exception as e:
+            logger.warning("ANKA v2.0 hatası [%s]: %s", symbol, str(e))
+
+    # ── Cup and Handle Quality ──
+    cup_handle_quality: Optional[CupHandleQuality] = None
+    if df is not None:
+        try:
+            cup_handle_quality = calculate_cup_handle_quality(df)
+        except Exception as e:
+            logger.warning("Cup and Handle hatası [%s]: %s", symbol, str(e))
+
     # ── Mum Formasyonları ──
     candles: list[CandlePattern] = []
     c_bias = "NONE"
@@ -346,6 +373,9 @@ def generate_signal(
         horizon_guidance=horizon,
         reason_factors=reason_factors,
         horizon_scores=horizon_scores,
+        anka_v2=anka_v2,
+        tradingview_snapshot=indicators.get("tradingview_snapshot"),
+        cup_handle_quality=cup_handle_quality,
     )
 
 

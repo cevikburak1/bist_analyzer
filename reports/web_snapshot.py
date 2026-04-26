@@ -144,6 +144,7 @@ def _build_signal_payload(sig: Signal) -> dict[str, Any]:
     ew = sig.elliott_wave
     comm = sig.commentary
     horizon = sig.horizon_guidance
+    anka_v2 = sig.anka_v2
 
     return {
         "symbol": sig.symbol,
@@ -224,6 +225,11 @@ def _build_signal_payload(sig: Signal) -> dict[str, Any]:
         "horizon_scores": (
             sig.horizon_scores.as_dict() if sig.horizon_scores else None
         ),
+        "anka_v2": anka_v2.as_dict() if anka_v2 else None,
+        "tradingview_snapshot": sig.tradingview_snapshot,
+        "cup_handle_quality": (
+            sig.cup_handle_quality.as_dict() if sig.cup_handle_quality else None
+        ),
     }
 
 
@@ -243,6 +249,13 @@ def _build_series_payload(df: pd.DataFrame) -> list[dict[str, Any]]:
         "bb_upper",
         "bb_lower",
         "rsi",
+        "anka_body",
+        "anka_upper_wing",
+        "anka_lower_wing",
+        "anka_inner_upper_wing",
+        "anka_inner_lower_wing",
+        "anka_valley_score",
+        "anka_is_ash_phase",
     ]
     recent = df.tail(WEB_SERIES_LENGTH)
 

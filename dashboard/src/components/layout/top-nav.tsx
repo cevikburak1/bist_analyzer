@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, Landmark } from "lucide-react";
+import { Banknote, BrainCircuit, Flame, Landmark, LineChart, Radar, Trophy } from "lucide-react";
 import { HORIZON_OPTIONS, useHorizon } from "@/lib/horizon-context";
 
 const ITEMS = [
   { href: "/", label: "Teknik Analiz", icon: LineChart, match: (p: string) => p === "/" || p.startsWith("/hisse") },
+  { href: "/anka-v2", label: "ANKA v2", icon: Flame, match: (p: string) => p.startsWith("/anka-v2") },
+  { href: "/anka-engine", label: "ANKA Motor", icon: BrainCircuit, match: (p: string) => p.startsWith("/anka-engine") },
+  { href: "/cup-handle-quality", label: "Cup Handle", icon: Trophy, match: (p: string) => p.startsWith("/cup-handle-quality") },
+  { href: "/fair-value", label: "Adil Değer", icon: Banknote, match: (p: string) => p.startsWith("/fair-value") },
+  { href: "/silent-accumulation", label: "Sessiz Toplama", icon: Radar, match: (p: string) => p.startsWith("/silent-accumulation") },
   { href: "/buffett", label: "Buffett (Temel)", icon: Landmark, match: (p: string) => p.startsWith("/buffett") },
 ];
 
@@ -15,7 +20,13 @@ export function TopNav() {
   const { horizon, setHorizon } = useHorizon();
 
   // Buffett sayfasinda vade secici alakasiz; sadece teknik tarafta goster.
-  const showHorizonSelector = !pathname.startsWith("/buffett");
+  const showHorizonSelector =
+    !pathname.startsWith("/buffett") &&
+    !pathname.startsWith("/anka-v2") &&
+    !pathname.startsWith("/anka-engine") &&
+    !pathname.startsWith("/cup-handle-quality") &&
+    !pathname.startsWith("/fair-value") &&
+    !pathname.startsWith("/silent-accumulation");
 
   return (
     <nav className="border-b border-slate-800 bg-slate-950/80 backdrop-blur">

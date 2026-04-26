@@ -46,8 +46,8 @@ export function DcfCard({ intrinsic }: Props) {
       {mosAnomaly ? (
         <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           Bu hisse için DCF çıktıları olağan dışı bir büyüklüğe sahip (hisse adedi
-          veya FCF eşleşmesinde uyumsuzluk). Güvenlik marjı bu nedenle "Veri
-          Anomalisi" olarak işaretlendi.
+          veya FCF eşleşmesinde uyumsuzluk). Güvenlik marjı bu nedenle &quot;Veri
+          Anomalisi&quot; olarak işaretlendi.
         </p>
       ) : null}
       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">

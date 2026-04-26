@@ -31,6 +31,9 @@ export type BuffettListItem = {
   data_quality_pct: number;
   current_price: number | null;
   intrinsic_value: number | null;
+  fair_value: number | null;
+  fair_value_margin_pct: number | null;
+  fair_value_confidence: string | null;
   margin_of_safety: number | null;
   holding_recommendation: string;
   warnings_count: number;
@@ -82,6 +85,44 @@ export type BuffettIntrinsic = {
   current_price: number | null;
   is_na: boolean;
   reason: string;
+};
+
+export type FairValueMethod = {
+  label: string;
+  value: number | null;
+  source: string;
+  weight: number;
+};
+
+export type FairValueFinancialRow = {
+  period: string | null;
+  net_earnings: number | null;
+  revenue: number | null;
+  ebit: number | null;
+  ebitda: number | null;
+  fcf: number | null;
+  roe: number | null;
+};
+
+export type FairValueBlock = {
+  fair_value: number | null;
+  current_price: number | null;
+  margin_pct: number | null;
+  aggregation_method: string;
+  confidence_label: string;
+  confidence_cv: number | null;
+  valid_methods: number;
+  market: string;
+  currency: string;
+  bond_benchmark: string;
+  inflation_region: string;
+  high_inflation_warning: boolean;
+  sector_key: string;
+  sector_label: string;
+  forward_eps_source: string;
+  methods: Record<string, FairValueMethod>;
+  financials_table: FairValueFinancialRow[];
+  alerts: string[];
 };
 
 export type BuffettClassificationFactor = {
@@ -144,6 +185,7 @@ export type BuffettStockDetail = {
   signal: BuffettSignalBlock;
   score: BuffettScoreBlock;
   intrinsic: BuffettIntrinsic;
+  fair_value: FairValueBlock | null;
   history: BuffettHistory;
   fetch_errors: string[];
   fetched_at: string;

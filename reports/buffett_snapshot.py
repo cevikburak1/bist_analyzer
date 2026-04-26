@@ -24,6 +24,7 @@ from typing import Any, Optional
 
 from analysis.buffett_score import BuffettScoreBreakdown
 from analysis.buffett_signal import BuffettSignal
+from analysis.fair_value import FairValueResult
 from analysis.intrinsic_value import IntrinsicValueResult
 from config import (
     BUFFETT_LOCK_PATH,
@@ -143,6 +144,7 @@ class BuffettStockResult:
     score: BuffettScoreBreakdown
     intrinsic: IntrinsicValueResult
     signal: BuffettSignal
+    fair_value: FairValueResult | None = None
 
 
 def _key_metrics_summary(bundle: FundamentalsBundle, score: BuffettScoreBreakdown) -> dict:
@@ -221,6 +223,9 @@ def _build_summary_payload(result: BuffettStockResult) -> dict:
         "data_quality_pct": round(result.score.data_quality_pct, 1),
         "current_price": _safe_json_value(info.get("currentPrice") or info.get("previousClose")),
         "intrinsic_value": _safe_json_value(result.intrinsic.intrinsic_value_per_share),
+        "fair_value": _safe_json_value(result.fair_value.fair_value if result.fair_value else None),
+        "fair_value_margin_pct": _safe_json_value(result.fair_value.margin_pct if result.fair_value else None),
+        "fair_value_confidence": result.fair_value.confidence_label if result.fair_value else None,
         "margin_of_safety": _safe_json_value(result.signal.margin_of_safety),
         "holding_recommendation": result.signal.holding_recommendation,
         "warnings_count": len(result.signal.warnings),
@@ -243,6 +248,7 @@ def _build_detail_payload(result: BuffettStockResult, generated_at: str) -> dict
         "signal": result.signal.as_dict(),
         "score": result.score.as_dict(),
         "intrinsic": result.intrinsic.as_dict(),
+        "fair_value": result.fair_value.as_dict() if result.fair_value else None,
         "history": _history_series(result.bundle),
         "fetch_errors": list(result.bundle.fetch_errors),
         "fetched_at": result.bundle.fetched_at,

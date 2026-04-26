@@ -41,6 +41,7 @@ from config import (
     REPORT_DATE_FORMAT,
 )
 from data.downloader import load_symbols, download_stock
+from data.tradingview import fetch_tradingview_snapshots
 from analysis.indicators import (
     calculate_all_indicators,
     get_latest_indicators,
@@ -290,6 +291,19 @@ def run_pipeline(
 
     if not args.quiet:
         console.print(f"  ✓ {len(all_indicators)} hisse için göstergeler hesaplandı")
+
+    tv_snapshots = fetch_tradingview_snapshots(
+        list(all_indicators.keys()),
+        latest_indicators=all_indicators,
+    )
+    for symbol, snapshot in tv_snapshots.items():
+        if symbol in all_indicators:
+            all_indicators[symbol]["tradingview_snapshot"] = snapshot.as_dict()
+    if tv_snapshots and not args.quiet:
+        verified_count = sum(1 for item in tv_snapshots.values() if item.status == "verified")
+        console.print(
+            f"  ✓ TradingView snapshot doğrulandı: {verified_count}/{len(tv_snapshots)}"
+        )
 
     # ── 5. Skorlama ──────────────────────────────────────────────────
     if not args.quiet:

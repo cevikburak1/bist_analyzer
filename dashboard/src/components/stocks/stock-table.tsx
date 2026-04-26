@@ -15,6 +15,8 @@ type SortKey =
   | "symbol"
   | "score"
   | "price"
+  | "fairValue"
+  | "fairMargin"
   | "rsi"
   | "stopLoss"
   | "shortTarget"
@@ -23,6 +25,11 @@ type SortKey =
 
 type StockTableProps = {
   signals: ReportSignal[];
+  fairValueBySymbol?: Record<string, {
+    fairValue: number | null;
+    marginPct: number | null;
+    confidence: string | null;
+  }>;
 };
 
 const PAGE_SIZE = 25;
@@ -62,7 +69,7 @@ function getHorizonView(signal: ReportSignal, horizon: HorizonKey): HorizonView 
   };
 }
 
-export function StockTable({ signals }: StockTableProps) {
+export function StockTable({ signals, fairValueBySymbol = {} }: StockTableProps) {
   const { horizon, setHorizon } = useHorizon();
   const [search, setSearch] = useState("");
   const [signalFilter, setSignalFilter] = useState("ALL");
@@ -102,6 +109,10 @@ export function StockTable({ signals }: StockTableProps) {
             return view.score;
           case "price":
             return signal.price;
+          case "fairValue":
+            return fairValueBySymbol[signal.symbol]?.fairValue ?? 0;
+          case "fairMargin":
+            return fairValueBySymbol[signal.symbol]?.marginPct ?? -999;
           case "rsi":
             return signal.rsi;
           case "stopLoss":
@@ -125,7 +136,7 @@ export function StockTable({ signals }: StockTableProps) {
       return (((leftValue as number) ?? 0) - ((rightValue as number) ?? 0)) * multiplier;
     });
     return next;
-  }, [filtered, sortDirection, sortKey, horizon]);
+  }, [filtered, sortDirection, sortKey, horizon, fairValueBySymbol]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -243,6 +254,16 @@ export function StockTable({ signals }: StockTableProps) {
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
+                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("fairValue")}>
+                    Adil Değer {sortKey === "fairValue" ? sortIcon : null}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("fairMargin")}>
+                    İsk/Prim {sortKey === "fairMargin" ? sortIcon : null}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
                   <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("rsi")}>
                     RSI {sortKey === "rsi" ? sortIcon : null}
                   </button>
@@ -264,6 +285,7 @@ export function StockTable({ signals }: StockTableProps) {
             <TableBody>
               {pageData.map((signal) => {
                 const view = getHorizonView(signal, horizon);
+                const fair = fairValueBySymbol[signal.symbol];
                 return (
                 <TableRow key={signal.symbol} className="border-slate-800 hover:bg-slate-900/60">
                   <TableCell>
@@ -293,6 +315,27 @@ export function StockTable({ signals }: StockTableProps) {
                     </span>
                   </TableCell>
                   <TableCell className="text-right text-slate-200">{formatPrice(signal.price)}</TableCell>
+                  <TableCell className="text-right text-blue-100">
+                    {fair?.fairValue ? (
+                      <Link href={`/fair-value/${signal.symbol}`} className="hover:text-blue-200">
+                        {formatPrice(fair.fairValue)}
+                      </Link>
+                    ) : "-"}
+                    <div className="text-[10px] text-slate-500">{fair?.confidence ?? ""}</div>
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-medium ${
+                      (fair?.marginPct ?? 0) >= 20
+                        ? "text-emerald-300"
+                        : (fair?.marginPct ?? 0) <= -20
+                          ? "text-rose-300"
+                          : "text-amber-200"
+                    }`}
+                  >
+                    {fair?.marginPct === null || fair?.marginPct === undefined
+                      ? "-"
+                      : `${fair.marginPct >= 0 ? "+" : ""}${fair.marginPct.toFixed(1)}%`}
+                  </TableCell>
                   <TableCell className="text-right text-slate-300">{signal.rsi.toFixed(1)}</TableCell>
                   <TableCell
                     className={`text-right ${

@@ -43,6 +43,7 @@ from rich.table import Table
 
 from analysis.buffett_score import calculate_buffett_score
 from analysis.buffett_signal import build_buffett_signal
+from analysis.fair_value import calculate_fair_value
 from analysis.intrinsic_value import DCFAssumptions, calculate_intrinsic_value
 from config import LOG_FILE, LOG_LEVEL
 from fundamentals.downloader import download_fundamentals, load_symbols
@@ -173,9 +174,11 @@ def main() -> int:
                         current_price=current_price,
                     )
                     signal = build_buffett_signal(bundle, score, intrinsic)
+                    fair_value = calculate_fair_value(bundle)
 
                     results.append(BuffettStockResult(
                         bundle=bundle, score=score, intrinsic=intrinsic, signal=signal,
+                        fair_value=fair_value,
                     ))
                 except Exception as e:
                     logger.exception("Buffett pipeline hata [%s]: %s", sym, e)

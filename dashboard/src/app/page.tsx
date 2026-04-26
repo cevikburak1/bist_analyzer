@@ -5,11 +5,14 @@ import { AnalysisStatusBanner } from "@/components/dashboard/analysis-status-ban
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { StockTable } from "@/components/stocks/stock-table";
 import { useAnalysisData } from "@/hooks/use-analysis-data";
+import { useBuffettData } from "@/hooks/use-buffett-data";
 import { formatDateTime } from "@/lib/formatters";
+import type { BuffettListResponse } from "@/lib/types/buffett";
 import type { ReportData } from "@/lib/types/report";
 
 export default function Dashboard() {
   const { data, status, error, isLoading, reload } = useAnalysisData<ReportData>();
+  const { data: fairData } = useBuffettData<BuffettListResponse>();
 
   if (isLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">Yukleniyor...</div>;
@@ -32,6 +35,17 @@ export default function Dashboard() {
     await fetch("/api/analysis/refresh", { method: "POST" });
     await reload();
   };
+
+  const fairValueBySymbol = Object.fromEntries(
+    (fairData?.items ?? []).map((item) => [
+      item.symbol,
+      {
+        fairValue: item.fair_value,
+        marginPct: item.fair_value_margin_pct,
+        confidence: item.fair_value_confidence,
+      },
+    ]),
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 px-6 py-8 text-slate-50">
@@ -69,7 +83,7 @@ export default function Dashboard() {
               Siralama, filtreleme, sayfalama ve detay sayfasina gecis buradan yonetilir.
             </p>
           </div>
-          <StockTable signals={data.signals} />
+          <StockTable signals={data.signals} fairValueBySymbol={fairValueBySymbol} />
         </div>
       </div>
     </div>

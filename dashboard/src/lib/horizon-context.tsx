@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -28,19 +27,20 @@ export const HORIZON_OPTIONS: { value: HorizonKey; label: string; subtitle: stri
 const HorizonContext = createContext<HorizonContextValue | null>(null);
 
 export function HorizonProvider({ children }: { children: React.ReactNode }) {
-  const [horizon, setHorizonState] = useState<HorizonKey>(DEFAULT_HORIZON);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const [horizon, setHorizonState] = useState<HorizonKey>(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_HORIZON;
+    }
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (stored === "short" || stored === "swing" || stored === "medium" || stored === "long") {
-        setHorizonState(stored);
+        return stored;
       }
     } catch {
       // localStorage devre disi olabilir; default ile devam
     }
-  }, []);
+    return DEFAULT_HORIZON;
+  });
 
   const setHorizon = useCallback((h: HorizonKey) => {
     setHorizonState(h);

@@ -135,6 +135,155 @@ export type HorizonScoreSet = {
   long: HorizonScore;
 };
 
+export type AnkaValley = {
+  score: number;
+  name: string;
+  color: string;
+  metaphor: string;
+  market_comment: string;
+  potential_move: string;
+};
+
+export type AnkaKnnVolume = {
+  relative_volume: number;
+  neighbor_count: number;
+  bullish_ratio: number;
+  bearish_ratio: number;
+  confidence: number;
+  label: string;
+};
+
+export type AnkaFibonacciConfirmation = {
+  bonus: number;
+  label: string;
+  level_name: string;
+  level_price: number;
+  message: string;
+};
+
+export type AnkaCalibration = {
+  status: string;
+  label: string;
+  total_success_rate: number | null;
+  bull_success_rate: number | null;
+  bear_success_rate: number | null;
+  total_signals: number;
+  bull_signals: number;
+  bear_signals: number;
+};
+
+export type AnkaLayerState = {
+  score: number;
+  direction: string;
+  symbol: string;
+};
+
+export type AnkaLayerEngine = {
+  score: number;
+  confidence_stars: number;
+  chain: string;
+  scenario: string;
+  recommendation: string;
+  layers: {
+    valley: AnkaLayerState;
+    momentum: AnkaLayerState;
+    trend: AnkaLayerState;
+    volatility: AnkaLayerState;
+    signal: AnkaLayerState;
+  };
+};
+
+export type AnkaLrEngine = {
+  score: number;
+  direction: string;
+  slope_pct: number;
+  r2: number;
+  intensity: string;
+};
+
+export type AnkaKnnPattern = {
+  score: number;
+  prediction: string;
+  confidence: number;
+  neighbors: number;
+  weighted_return_pct?: number;
+  params: {
+    n: number;
+    nd: number;
+    ny: number;
+    spacing: number;
+    atr_n: number;
+    features: string[];
+  };
+};
+
+export type AnkaV2Data = {
+  synthesis_score: number;
+  synthesis_decision: string;
+  primary_signal: string;
+  phase: string;
+  trend: string;
+  momentum_label: string;
+  fire_power: number;
+  body: number;
+  breath: number;
+  upper_wing: number;
+  lower_wing: number;
+  inner_upper_wing: number;
+  inner_lower_wing: number;
+  is_ash_phase: boolean;
+  valley: AnkaValley;
+  knn_volume: AnkaKnnVolume;
+  fibonacci_confirmation: AnkaFibonacciConfirmation;
+  calibration: AnkaCalibration;
+  lr_engine: AnkaLrEngine;
+  knn_pattern: AnkaKnnPattern;
+  layer_engine: AnkaLayerEngine;
+  synthesis_weights: Record<string, number>;
+  alerts: string[];
+};
+
+export type TradingViewSnapshot = {
+  symbol: string;
+  close: number | null;
+  high: number | null;
+  low: number | null;
+  volume: number | null;
+  change_pct: number | null;
+  source: string;
+  status: string;
+  price_delta_pct: number | null;
+  volume_delta_pct: number | null;
+};
+
+export type CupHandlePoint = {
+  index: number;
+  price: number;
+};
+
+export type CupHandleQuality = {
+  status: string;
+  is_detected: boolean;
+  is_confirmed: boolean;
+  cup_symmetry: number | null;
+  handle_depth_pct: number | null;
+  breakout_quality: number | null;
+  score: number | null;
+  rim_price: number | null;
+  target_price: number | null;
+  cup_depth: number | null;
+  message: string;
+  points: {
+    left_rim?: CupHandlePoint;
+    cup_base?: CupHandlePoint;
+    right_rim?: CupHandlePoint;
+    handle_low?: CupHandlePoint;
+    breakout_index?: number;
+    target_end_index?: number;
+  };
+  params: Record<string, number | string | boolean>;
+};
+
 export type ReportSignal = {
   symbol: string;
   price: number;
@@ -163,6 +312,9 @@ export type ReportSignal = {
   score_breakdown: ScoreBreakdown;
   horizon_guidance: HorizonGuidance | null;
   horizon_scores: HorizonScoreSet | null;
+  anka_v2: AnkaV2Data | null;
+  tradingview_snapshot: TradingViewSnapshot | null;
+  cup_handle_quality: CupHandleQuality | null;
 };
 
 export type ReportData = {
@@ -185,6 +337,13 @@ export type StockSeriesPoint = {
   bb_upper: number | null;
   bb_lower: number | null;
   rsi: number | null;
+  anka_body: number | null;
+  anka_upper_wing: number | null;
+  anka_lower_wing: number | null;
+  anka_inner_upper_wing: number | null;
+  anka_inner_lower_wing: number | null;
+  anka_valley_score: number | null;
+  anka_is_ash_phase: boolean | null;
 };
 
 export type StockDetailData = {

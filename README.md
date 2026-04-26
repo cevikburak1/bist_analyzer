@@ -1,156 +1,225 @@
-<div align="center">
+# BIST Analyzer
 
-# 📈 BIST Hisse Senedi Analiz ve Sinyal Sistemi
+BIST Analyzer, Borsa Istanbul hisseleri icin teknik analiz, temel degerleme, formasyon tarama ve akilli para birikim sinyallerini tek dashboard altinda toplayan Python + Next.js uygulamasidir.
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+Sistem yfinance ile OHLCV ve temel veri indirir, analizleri JSON snapshot olarak uretir ve `dashboard/` altindaki Next.js arayuzunde filtrelenebilir, siralanabilir ve sayfalanabilir tablolara donusturur.
 
-Borsa İstanbul (BIST) paylarını gelişmiş teknik analiz yöntemleriyle değerlendiren, 0-100 arası skorlayan ve çok faktörlü **AL/SAT/BEKLE** sinyalleri üreten kapsamlı analiz sistemi ve modern web arayüzü.
+## One Cikanlar
 
-[Özellikler](#-özellikler) • [Kurulum](#-kurulum) • [Kullanım](#-kullanım) • [Skorlama Sistemi](#-skorlama-sistemi) • [Dashboard](#-web-dashboard)
+- Tum BIST sembol evreni: `data/symbols.txt` icindeki hisseler otomatik islenir.
+- Teknik analiz: SMA, RSI, MACD, Bollinger, ATR, OBV, Fibonacci, Elliott, mum formasyonlari ve cok vadeli hedefler.
+- ANKA v2.0: Yedi Vadi, adaptif kanatlar, kNN hacim, Fibonacci sentez teyidi ve gecmis basari kalibrasyonu.
+- ANKA Motor: Katman motoru, lineer regresyon trend yogunlugu, kNN oruntu tahmini ve agirlikli sentez karari.
+- Cup and Handle Quality: cup symmetry, handle depth, breakout quality, target projection ve AGPro tarzinda kalite paneli.
+- Adil Deger v3.7.1: 10 degerleme metodu, sektor agirlikli agregasyon, confidence, iskonto/prim ve 8 donem finansal tablo.
+- Sessiz Toplama Tarayici: RSI pozitif uyumsuzluk, OBV/CMF sessiz birikim, XU100 relatif guc ve uzun donem dip filtresi.
+- TradingView snapshot dogrulama: `scanner.tradingview.com/turkey/scan` public endpoint'i best-effort son fiyat/hacim karsilastirmasi icin kullanilir.
+- Dashboard: tum liste sayfalarinda alan bazli sorting ve pagination.
 
-</div>
+## Kurulum
 
----
+Gereksinimler:
 
-## 🌟 Özellikler
-
-- **Geniş Sembol Evreni**: `data/symbols.txt` içindeki BIST pay listesini otomatik analiz eder.
-- **Otomatik Veri Çekme**: `yfinance` entegrasyonu ile günlük OHLCV verilerini indirir ve önbellekler.
-- **Gelişmiş Teknik Analiz**: SMA, RSI, MACD, Bollinger Bantları, OBV, Fibonacci Seviyeleri, Elliott Dalga Teorisi ve Mum Formasyonları.
-- **5 Kategorili Skorlama Motoru**: Trend, Momentum, Hacim, Fiyat Pozisyonu ve Piyasa Uyumu (Beta) metriklerini harmanlayarak 0-100 arası skor üretir.
-- **Akıllı Sinyal Sistemi**: Çok faktörlü kurallarla AL/SAT/BEKLE kararları verir.
-- **Piyasa Rejimi Tespiti**: XU100 endeksine dayalı yükseliş/düşüş/yatay rejim analizi (Düşüş rejiminde riskli sinyaller filtrelenir).
-- **Çoklu Rapor Formatları**:
-  - 🖥️ **Terminal**: `Rich` kütüphanesi ile renkli ve okunabilir CLI çıktısı
-  - 📊 **Görsel**: `Matplotlib` ile PNG formatında tablo ve grafikler
-  - 🌐 **İnteraktif**: `Plotly` ile HTML raporlar
-  - 💾 **Veri**: Entegrasyonlar için CSV ve JSON çıktıları
-- **Modern Web Dashboard**: Analiz sonuçlarını görselleştiren, Next.js tabanlı şık kullanıcı arayüzü.
-
-## 🚀 Kurulum
-
-### Gereksinimler
-- Python 3.10 veya üzeri
-- Node.js 18+ (Dashboard için)
-
-### Adımlar
-
-1. **Projeyi Klonlayın**
-   ```bash
-   git clone https://github.com/kullaniciadi/bist_analyzer.git
-   cd bist_analyzer
-   ```
-
-2. **Python Bağımlılıklarını Yükleyin**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Dashboard Bağımlılıklarını Yükleyin (Opsiyonel)**
-   ```bash
-   cd dashboard
-   npm install
-   cd ..
-   ```
-
-## 💻 Kullanım
-
-Sistemi çalıştırmak için `main.py` dosyasını kullanabilirsiniz. Çeşitli parametrelerle analizi özelleştirebilirsiniz:
+- Python 3.10+
+- Node.js 18+
 
 ```bash
-# Tüm BIST pay listesini analiz et
-python main.py
-
-# Sadece belirli hisseleri analiz et
-python main.py --symbols THYAO ASELS KCHOL FROTO
-
-# Analiz bittikten sonra React Dashboard'u otomatik başlat
-python main.py --dashboard
-
-# Sessiz mod (Terminal çıktısı vermez, sadece dosyaları oluşturur)
-python main.py --quiet
-
-# PNG grafik veya HTML rapor oluşturmayı devre dışı bırak
-python main.py --no-charts
-python main.py --no-html
-
-# Önbelleği (cache) yoksay ve tüm verileri baştan indir
-python main.py --force-download
+pip install -r requirements.txt
+cd dashboard
+npm install
+cd ..
 ```
 
-## 🧠 Skorlama Sistemi
+## Analiz Komutlari
 
-Her hisse senedi 5 ana kategoride değerlendirilir ve maksimum 100 puan üzerinden skorlanır:
+Teknik analiz ve ANKA/Cup Handle ciktisi:
 
-| Kategori | Maks Puan | Kriterler |
-|----------|-----------|-----------|
-| **Trend Analizi** | 25 | Fiyat vs SMA50/200, Golden Cross durumu, Regresyon eğimi |
-| **Momentum** | 25 | RSI ideal bölgesi, MACD kesişimleri ve gücü |
-| **Hacim** | 20 | Hacim ortalaması kıyaslaması, OBV (On-Balance Volume) trendi |
-| **Fiyat Pozisyonu** | 15 | 52-haftalık zirve/dip pozisyonu, Bollinger bantları konumu |
-| **Piyasa Uyumu** | 15 | XU100 endeksine göre göreceli performans, Beta katsayısı |
-
-## 🎯 Sinyal Kuralları
-
-Sistem, hesaplanan skor ve teknik göstergelere dayanarak aşağıdaki kurallarla sinyal üretir:
-
-- 🟢 **AL**: Skor >= 65, RSI 30-70 arası, Fiyat > 200 SMA, Hacim >= 1.2x ortalama
-- 🔴 **SAT**: Skor <= 35 **VEYA** (RSI > 75 + Bollinger üst bant kırılımı) **VEYA** (MACD negatif + SMA50 altı)
-- ⚪ **BEKLE**: Diğer tüm durumlar
-
-> ⚠️ **Not:** Piyasa rejimi "Düşüş" (Bear Market) olarak tespit edilirse, AL sinyalleri için kriterler otomatik olarak zorlaştırılır veya filtrelenir.
-
-## 🖥️ Web Dashboard
-
-Proje, analiz sonuçlarını modern bir arayüzde inceleyebileceğiniz bir Next.js dashboard içerir.
-
-Dashboard'u başlatmak için:
 ```bash
-# Analiz ile birlikte başlatmak için:
-python main.py --dashboard
+python main.py --quiet --no-html --no-charts
+```
 
-# Veya manuel olarak başlatmak için:
+Sadece belirli semboller:
+
+```bash
+python main.py --symbols THYAO ASELS SASA --quiet --no-html --no-charts
+```
+
+Temel analiz ve Adil Deger:
+
+```bash
+python buffett_main.py --quiet
+```
+
+Sessiz Toplama tarayicisi:
+
+```bash
+python silent_accumulation_main.py
+```
+
+Belirli grup veya semboller:
+
+```bash
+python silent_accumulation_main.py --group 3
+python silent_accumulation_main.py --symbols THYAO ASELS SASA
+```
+
+Dashboard:
+
+```bash
 cd dashboard
 npm run dev
 ```
-Tarayıcınızda `http://localhost:3000` adresine giderek arayüze erişebilirsiniz.
 
-## 📁 Proje Yapısı
+Arayuz varsayilan olarak `http://localhost:3000` adresinde acilir.
+
+## Dashboard Sayfalari
+
+| Sayfa | Rota | Aciklama |
+| --- | --- | --- |
+| Teknik Analiz | `/` | Tum hisseler, vade bazli teknik karar, hedefler, RSI, Fibonacci, mum ozeti ve Adil Deger kolonlari |
+| Hisse Detay | `/hisse/[symbol]` | Teknik detay, fiyat grafikleri, hedefler, vade panelleri |
+| ANKA v2 | `/anka-v2` | Yedi Vadi, kNN hacim, Fibonacci sentez, kalibrasyon listesi |
+| ANKA v2 Detay | `/anka-v2/[symbol]` | TradingView tarzinda adaptif kanatlar, vadi osilatoru ve bilgi paneli |
+| ANKA Motor | `/anka-engine` | K1-K5 katman, LR ve kNN motor sentez tablosu |
+| ANKA Motor Detay | `/anka-engine/[symbol]` | LR + kNN + katman motor grafik paneli |
+| Cup Handle | `/cup-handle-quality` | Cup and Handle kalite taramasi |
+| Cup Handle Detay | `/cup-handle-quality/[symbol]` | Cup/handle kutulari, kalin kavisler, rim/target cizgileri ve kalite paneli |
+| Adil Deger | `/fair-value` | 10 metotlu sektor agirlikli fair value tablosu |
+| Adil Deger Detay | `/fair-value/[symbol]` | Method breakdown, confidence, iskonto/prim bandi ve finansal tablo |
+| Sessiz Toplama | `/silent-accumulation` | 15 grup destekli cift sutun akilli para tarayicisi |
+| Buffett | `/buffett` | Buffett tipi kalite ve temel analiz listesi |
+
+## Uretilen Snapshot Dosyalari
+
+```text
+output/web/latest_report.json                  # teknik analiz, ANKA v2, ANKA Motor, Cup Handle
+output/web/stocks/{SYMBOL}.json                # teknik hisse detaylari
+output/web/buffett/latest.json                 # temel analiz ve adil deger listesi
+output/web/buffett/stocks/{SYMBOL}.json        # temel/adil deger detaylari
+output/web/silent_accumulation/latest.json     # sessiz toplama tarayicisi
+```
+
+## Analiz Motorlari
+
+### Teknik Analiz
+
+Ana teknik motor 5 kategoriden skor uretir:
+
+| Kategori | Maks Puan | Kriterler |
+| --- | ---: | --- |
+| Trend | 25 | SMA50/200, golden cross, regresyon egimi |
+| Momentum | 25 | RSI, MACD, histogram |
+| Hacim | 20 | Hacim ortalamasi, OBV trendi |
+| Fiyat Pozisyonu | 15 | 52 hafta konumu, Bollinger orta bant |
+| Piyasa Uyumu | 15 | XU100 rejimi, beta |
+
+### ANKA v2.0
+
+`analysis/anka_v2.py` sunlari hesaplar:
+
+- Anka Vucudu: EMA tabanli orta egilim.
+- Anka Nefesi: ATR/volatilite olcumu.
+- Anka Kanatlari: adaptif dis kanal ve altin oran ic kanal.
+- Yedi Vadi: momentum, trend gucu ve volatilite karisimindan 0-100 faz puani.
+- kNN Hacim: mum govdesi, golgeler, kapanis konumu ve relatif hacim ile yakin oruntu analizi.
+- Fibonacci Sentez Teyidi: destek/direnc seviyelerine gore bonus veya temkin uyarisi.
+- Gecmis Basari Kalibrasyonu: son 50 barda 3-bar ufuk basari orani.
+
+### ANKA Motor
+
+ANKA Motor, ANKA v2 ciktisini ikinci karar katmanina tasir:
+
+- Katman Motoru: Vadi, Momentum, Trend, Volatilite, Sinyal.
+- LR Trend Yogunlugu: lineer regresyon egimi ve R2.
+- kNN Oruntu Tahmini: N=8, ND=6, NY=3, spacing=25, ATR_N=14.
+- Sentez: Katman Motoru %40, LR %30, kNN %30.
+
+### Cup and Handle Quality
+
+`analysis/cup_handle.py` pivot tabanli cup-and-handle yasam dongusunu tarar:
+
+- Sol rim, cup base, sag rim, handle low.
+- Cup symmetry.
+- Handle depth.
+- Breakout quality.
+- Measured target projection.
+
+### Adil Deger
+
+`analysis/fair_value.py` 10 metodu ayni anda hesaplar:
+
+1. Net Earnings P/E
+2. ROE-Based
+3. EV/EBIT
+4. EV/EBITDA
+5. EV/Revenue
+6. Forward P/E
+7. Forward P/S
+8. P/FCF
+9. Graham Number
+10. DCF
+
+Varsayilan agregasyon `Sector Weighted` modudur. Eksik finansal alani olan metotlar `null` kalir; confidence degeri metotlar arasi dagilimi gosterir.
+
+### Sessiz Toplama Tarayici
+
+`analysis/silent_accumulation.py` sunlari tarar:
+
+- RSI pozitif divergence.
+- Dar bantta fiyat + OBV/CMF birikimi.
+- XU100'e gore relatif guc.
+- Uzun donem dipten en fazla %15 uzaklik filtresi.
+- 15 grup mantigi ve filtre modlari: Any, 2+, Flawless, Only RSI, Only Volume, Only RS, Only CMF.
+
+## Dogrulama
+
+Python dosyalari:
+
+```bash
+python -m py_compile analysis/anka_v2.py analysis/cup_handle.py analysis/fair_value.py analysis/silent_accumulation.py
+```
+
+Dashboard:
+
+```bash
+cd dashboard
+npm run lint
+npm run build
+```
+
+## Proje Yapisi
 
 ```text
 bist_analyzer/
-├── main.py                  # Ana orkestrasyon ve CLI giriş noktası
-├── config.py                # Merkezi yapılandırma ayarları
-├── data/
-│   ├── downloader.py        # yfinance entegrasyonu ve önbellekleme
-│   └── symbols.txt          # Analiz edilecek BIST pay listesi
 ├── analysis/
-│   ├── indicators.py        # Teknik gösterge hesaplamaları
-│   ├── scoring.py           # 5 kategorili skorlama motoru
-│   ├── signals.py           # Sinyal üretim mantığı
-│   ├── candle_patterns.py   # Mum formasyonları tespiti
-│   └── market_regime.py     # XU100 tabanlı piyasa rejimi analizi
-├── reports/                 # Terminal, PNG, HTML ve JSON/CSV raporlayıcıları
-├── dashboard/               # Next.js tabanlı web arayüzü
-├── output/                  # Üretilen rapor ve veri çıktıları
-└── logs/                    # Sistem logları
+│   ├── anka_v2.py
+│   ├── cup_handle.py
+│   ├── fair_value.py
+│   ├── silent_accumulation.py
+│   ├── scoring.py
+│   └── signals.py
+├── data/
+│   ├── downloader.py
+│   ├── tradingview.py
+│   └── symbols.txt
+├── reports/
+│   ├── web_snapshot.py
+│   ├── buffett_snapshot.py
+│   └── silent_accumulation_snapshot.py
+├── dashboard/
+│   └── src/app/
+│       ├── anka-v2/
+│       ├── anka-engine/
+│       ├── cup-handle-quality/
+│       ├── fair-value/
+│       └── silent-accumulation/
+├── main.py
+├── buffett_main.py
+└── silent_accumulation_main.py
 ```
 
-## ⚙️ Yapılandırma
+## Notlar
 
-`config.py` dosyası üzerinden sistemin davranışını tamamen özelleştirebilirsiniz:
-- Sinyal eşikleri (Örn: AL için min skor: 65)
-- İndikatör periyotları (RSI: 14, SMA: 50/200)
-- Hacim çarpanı (1.2x)
-- Rate limiting ve önbellek süreleri
-
-## ⚠️ Yasal Uyarı
-
-Bu yazılım **kesinlikle yatırım tavsiyesi vermez**. Üretilen tüm sinyaller, skorlar ve analizler tamamen matematiksel formüllere ve geçmiş fiyat verilerine dayalı teknik göstergelerdir. 
-
-Finansal piyasalarda işlem yapmak yüksek risk içerir. Yatırım kararlarınızı almadan önce kendi araştırmanızı yapmalı ve profesyonel bir finansal danışmandan destek almalısınız. Bu yazılımın kullanımından doğabilecek herhangi bir maddi kayıptan geliştiriciler sorumlu tutulamaz.
-
----
+- TradingView scanner endpoint'i resmi ve stabil bir tarihsel veri API'si degildir. Sistem bu kaynagi sadece best-effort snapshot dogrulamasi olarak kullanir.
+- Teknik analiz, temel analiz ve tarayicilar yatirim tavsiyesi degildir.
+- Finansal piyasalarda islem yapmak yuksek risk icerir; kararlarinizi kendi arastirmaniz ve risk yonetiminizle vermelisiniz.

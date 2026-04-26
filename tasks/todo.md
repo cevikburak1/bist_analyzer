@@ -1,0 +1,29 @@
+- [x] Plan onaylandıktan sonra uygulanabilir checklist oluşturuldu.
+- [x] ANKA v2.0 analiz motorunu ekle.
+- [x] Python sinyal hattını ve web snapshot çıktısını ANKA v2.0 verisiyle genişlet.
+- [x] Dashboard TypeScript tiplerini yeni payload için güncelle.
+- [x] `/anka-v2` ve `/anka-v2/[symbol]` sayfalarını oluştur.
+- [ ] Python analizi, dashboard lint ve mümkünse görsel doğrulamayı çalıştır.
+- [x] TradingView public scanner istemcisini opsiyonel snapshot veri kaynağı olarak ekle.
+- [x] TradingView snapshot değerlerini mevcut yfinance son değerleriyle toleranslı doğrula.
+- [x] ANKA detay ekranını referans görsele daha yakın grafik, bant, Fibo çizgileri, sinyal işaretleri ve panel düzeniyle güncelle.
+- [ ] Python analiz, JSON alan kontrolü, dashboard lint/build ve browser görsel kontrolünü çalıştır.
+- [x] ANKA motoru için LR, kNN, K1-K5 katman, sentez ağırlıkları ve uyarı alanlarını veri modeline ekle.
+- [x] Yeni ANKA Motor grafik bileşeni ve ayrı sayfaları oluştur, nav’a bağla.
+- [ ] ANKA Motor için Python analiz, JSON alan kontrolü, lint/build ve tarayıcı doğrulamasını çalıştır.
+- [x] Cup & Handle kalite motorunu Python analiz çıktısına ekle.
+- [x] Cup & Handle liste ve detay sayfalarını, grafik overlay ve paneliyle oluştur.
+- [ ] Cup & Handle için Python analiz, JSON kontrolü, lint/build ve mümkünse tarayıcı doğrulamasını çalıştır.
+- [x] 10 yöntemli Adil Değer modelini temel analiz çıktısına ekle.
+- [x] Fair Value liste ve detay sayfalarını panel, bant ve tablo görünümüyle oluştur.
+- [x] Adil Değer için Python temel analiz/JSON kontrolü, dashboard lint/build ve uygun doğrulamaları çalıştır.
+- [x] Sessiz Toplama için ayrı Python scanner, snapshot ve CLI çıktısını ekle.
+- [x] Dashboard loader/API ve TypeScript tiplerini Silent Accumulation payload için ekle.
+- [x] 15 grup + filtreli çift sütun dashboard sayfasını oluştur ve nav’a bağla.
+- [x] Sessiz Toplama için Python scanner, JSON kontrolü, dashboard lint/build doğrulamalarını çalıştır.
+- [x] Tüm BIST evreni için teknik, temel/adil değer ve sessiz toplama çıktıları yeniden üretildi.
+- [x] Teknik Analiz sayfasına adil değer, iskonto/prim kolonları ve sorting eklendi.
+- [x] ANKA v2, ANKA Motor, Cup Handle, Adil Değer ve Sessiz Toplama liste sayfalarına pagination ve alan bazlı sorting eklendi.
+
+## İnceleme
+- Uygulama henüz devam ediyor.

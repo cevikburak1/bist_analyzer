@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { HorizonScoreCard } from "@/components/shared/horizon-score-card";
 import { HORIZON_OPTIONS, useHorizon } from "@/lib/horizon-context";
 import type { HorizonKey, HorizonScoreSet } from "@/lib/types/report";
@@ -17,18 +16,12 @@ const DECISION_BADGE: Record<string, string> = {
 
 export function HorizonScoresPanel({ scores }: Props) {
   const { horizon, setHorizon } = useHorizon();
-  const [activeTab, setActiveTab] = useState<HorizonKey>(horizon);
-
-  useEffect(() => {
-    setActiveTab(horizon);
-  }, [horizon]);
 
   const handleSelect = (h: HorizonKey) => {
-    setActiveTab(h);
     setHorizon(h);
   };
 
-  const active = scores[activeTab];
+  const active = scores[horizon];
 
   return (
     <div className="space-y-4">
@@ -47,7 +40,7 @@ export function HorizonScoresPanel({ scores }: Props) {
         <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
           {HORIZON_OPTIONS.map((opt) => {
             const s = scores[opt.value];
-            const isActive = opt.value === activeTab;
+            const isActive = opt.value === horizon;
             const badge =
               DECISION_BADGE[s.decision] ?? "bg-slate-500/15 text-slate-200 border-slate-500/30";
             return (
