@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: bist-analyzer
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PYTHON_BIN
+        value: /opt/venv/bin/python
+      - key: RUN_ANALYSIS_ON_STARTUP
+        value: "0"

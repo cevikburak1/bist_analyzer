@@ -235,6 +235,23 @@ http://localhost:3000
 
 ---
 
+## Free Full-Stack Deploy
+
+This repository includes a Docker setup for free container hosts such as Render Free.
+
+On Render:
+
+1. Push the repository to GitHub.
+2. Create a new Blueprint or Web Service from the repository.
+3. Use the root directory of the repository, not `dashboard`.
+4. Keep the Docker environment and free instance plan.
+
+The web service starts the Next.js dashboard from `dashboard/` and keeps the existing Python refresh flow available through `/api/analysis/refresh`.
+
+By default, `RUN_ANALYSIS_ON_STARTUP` is `0` so the free instance can boot quickly. Set it to `1` only if you want the container to generate a snapshot before the first dashboard start.
+
+---
+
 ## Additional Pipelines
 
 ### Buffett / Fundamental Analysis

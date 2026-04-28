@@ -3,7 +3,7 @@ import path from "path";
 import type { SilentAccumulationResponse } from "@/lib/types/silent-accumulation";
 
 function getRepoRoot(): string {
-  return path.resolve(process.cwd(), "..");
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), "..");
 }
 
 function readJson<T>(filePath: string): T {

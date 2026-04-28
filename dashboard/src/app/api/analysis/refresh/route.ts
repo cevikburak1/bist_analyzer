@@ -2,6 +2,10 @@ import { spawn } from "child_process";
 import { NextResponse } from "next/server";
 import { getRepoPaths, loadAnalysisStatus } from "@/lib/report/loaders";
 
+function getPythonCommand() {
+  return process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
+}
+
 export async function POST() {
   try {
     const status = loadAnalysisStatus();
@@ -14,7 +18,7 @@ export async function POST() {
 
     const { repoRoot } = getRepoPaths();
     const child = spawn(
-      "python",
+      getPythonCommand(),
       ["main.py", "--quiet", "--no-charts", "--no-html"],
       {
         cwd: repoRoot,

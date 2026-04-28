@@ -3,7 +3,7 @@ import path from "path";
 import type { BuffettListResponse, BuffettStockDetail } from "@/lib/types/buffett";
 
 function getRepoRoot(): string {
-  return path.resolve(process.cwd(), "..");
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), "..");
 }
 
 function getBuffettDir(): string {

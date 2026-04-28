@@ -3,7 +3,7 @@ import path from "path";
 import type { AnalysisStatus, ReportData, StockDetailData } from "@/lib/types/report";
 
 function getRepoRoot(): string {
-  return path.resolve(process.cwd(), "..");
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), "..");
 }
 
 function getOutputDir(): string {
@@ -18,6 +18,32 @@ function readJsonFile<T>(filePath: string): T {
   return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
 }
 
+function emptyReport(): ReportData {
+  return {
+    generated_at: new Date(0).toISOString(),
+    market_regime: {
+      regime: "NOTR",
+      label: "VERI BEKLENIYOR",
+      index_price: 0,
+      sma_short: 0,
+      sma_long: 0,
+      performance_20d: 0,
+    },
+    summary: {
+      total: 0,
+      buy: 0,
+      sell: 0,
+      hold: 0,
+    },
+    meta: {
+      requested_symbols: 0,
+      successful_symbols: 0,
+      refresh_interval_minutes: 15,
+    },
+    signals: [],
+  };
+}
+
 export function loadLatestReport(): ReportData {
   const webReportPath = path.join(getWebOutputDir(), "latest_report.json");
   if (fs.existsSync(webReportPath)) {
@@ -25,13 +51,17 @@ export function loadLatestReport(): ReportData {
   }
 
   const outputDir = getOutputDir();
+  if (!fs.existsSync(outputDir)) {
+    return emptyReport();
+  }
+
   const files = fs.readdirSync(outputDir);
   const jsonFiles = files
     .filter((file) => file.startsWith("signals_") && file.endsWith(".json"))
     .sort((left, right) => right.localeCompare(left));
 
   if (jsonFiles.length === 0) {
-    throw new Error("No analysis report found");
+    return emptyReport();
   }
 
   const fallback = readJsonFile<{
