@@ -50,3 +50,14 @@
 
 ## İnceleme
 - Morpheus Scoring için ana teknik puanlama artık 0-100 piyasa rejimi ağırlıklı model yerine 100 üstüne çıkabilen additive skor üretiyor. Eski vade skor paneli yeni snapshot'ta üretilmiyor; BEKLE/KAR AL dahil tüm hisselerde stop/hedef doluyor. ATR eksikse swing aralığı, o da yoksa fiyatın %3'ü ile fallback hedef/stop üretiliyor. `output/web/latest_report.json` yeniden üretildi ve eksik stop/hedef sayısı 0 olarak doğrulandı. `pytest`, `npm run lint`, `npx tsc --noEmit`, `compileall` ve sentetik sinyal doğrulamaları geçti; snapshot sonrası tekrar test/lint denemesi kullanıcı tarafından kesildi.
+
+## Full Stack Deploy
+- [x] Dashboard build ve Python output üretimi yerelde doğrulandı.
+- [x] Docker tabanlı ücretsiz Render deploy yapılandırması eklendi.
+- [x] Container build/start, ana sayfa, `/api/data`, `/api/analysis/status` ve `/api/analysis/refresh` smoke testleri geçti.
+- [x] GitHub `main` branch push edildi ve Render Free Web Service oluşturuldu.
+- [x] Canlı URL doğrulandı: `https://bist-analyzer.onrender.com`.
+- [x] Tamamen ücretsiz plan korundu: Render Free instance seçildi.
+
+## İnceleme
+- Full-stack yayın için repo köküne Docker deploy akışı eklendi. Dashboard ilk deploy’da veri yokken boş snapshot ile açılıyor, refresh endpoint’i container içindeki Python venv üzerinden analiz başlatıyor. Render Free üzerinde servis canlıya alındı; ana sayfa ve veri API’si 200 döndü, public refresh endpoint’i analiz durumunu `running` olarak güncelledi. Render Free instance uykuya geçebilir ve tam BIST analizi ücretsiz kaynak limitleri nedeniyle uzun sürebilir.
