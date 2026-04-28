@@ -40,6 +40,11 @@ MAX_WORKERS = 4                 # Paralel indirme thread sayısı
 # ── İndikatör Periyotları ────────────────────────────────────────────────────
 SMA_SHORT = 50
 SMA_LONG = 200
+EMA_FAST = 13
+EMA_SIGNAL = 21
+EMA_PERFECT_FAST = 20
+EMA_PERFECT_MID = 50
+EMA_PERFECT_SLOW = 200
 RSI_PERIOD = 14
 MACD_FAST = 12
 MACD_SLOW = 26
@@ -47,6 +52,7 @@ MACD_SIGNAL = 9
 BB_PERIOD = 20
 BB_STD = 2
 OBV_SMA_PERIOD = 20
+ADX_PERIOD = 14
 
 # ── Hacim Ayarları ───────────────────────────────────────────────────────────
 VOLUME_AVG_PERIOD = 20          # Hacim ortalaması periyodu
@@ -57,16 +63,18 @@ VOLUME_MULTIPLIER = 1.2         # AL sinyali için minimum hacim çarpanı
 TREND_REGRESSION_PERIOD = 20    # Lineer regresyon penceresi
 
 # ── Skor Eşikleri ────────────────────────────────────────────────────────────
-BUY_THRESHOLD = 65
-SELL_THRESHOLD = 35
+BUY_THRESHOLD = 170
+STRONG_BUY_THRESHOLD = 220
+SELL_THRESHOLD = 90
+OVEREXTENSION_DISTANCE_PCT = 12.0
 
 # ── Skor Ağırlıkları (toplam 100) ───────────────────────────────────────────
 SCORE_WEIGHTS = {
-    "trend": 25,
-    "momentum": 25,
-    "volume": 20,
-    "price_position": 15,
-    "market_regime": 15,
+    "trend": 95,
+    "momentum": 70,
+    "volume": 55,
+    "price_position": 35,
+    "squeeze_breakout": 55,
 }
 
 # ── Sinyal Kuralları ─────────────────────────────────────────────────────────

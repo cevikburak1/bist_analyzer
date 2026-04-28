@@ -14,6 +14,11 @@ from scipy import stats
 from config import (
     SMA_SHORT,
     SMA_LONG,
+    EMA_FAST,
+    EMA_SIGNAL,
+    EMA_PERFECT_FAST,
+    EMA_PERFECT_MID,
+    EMA_PERFECT_SLOW,
     RSI_PERIOD,
     MACD_FAST,
     MACD_SLOW,
@@ -21,6 +26,7 @@ from config import (
     BB_PERIOD,
     BB_STD,
     OBV_SMA_PERIOD,
+    ADX_PERIOD,
     VOLUME_AVG_PERIOD,
     VOLUME_SHORT_PERIOD,
     TREND_REGRESSION_PERIOD,
@@ -32,6 +38,11 @@ logger = logging.getLogger(__name__)
 def calculate_sma(series: pd.Series, period: int) -> pd.Series:
     """Basit Hareketli Ortalama (Simple Moving Average)"""
     return series.rolling(window=period, min_periods=period).mean()
+
+
+def calculate_ema(series: pd.Series, period: int) -> pd.Series:
+    """Üssel Hareketli Ortalama (Exponential Moving Average)"""
+    return series.ewm(span=period, min_periods=period, adjust=False).mean()
 
 
 def calculate_rsi(close: pd.Series, period: int = RSI_PERIOD) -> pd.Series:
@@ -113,6 +124,33 @@ def calculate_atr(
     tr3 = (low - prev_close).abs()
     true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
     return true_range.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+
+
+def calculate_adx(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int = ADX_PERIOD,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """
+    Average Directional Index.
+
+    ADX trendin gücünü, +DI/-DI ise yön baskısını gösterir.
+    """
+    prev_high = high.shift(1)
+    prev_low = low.shift(1)
+
+    up_move = high - prev_high
+    down_move = prev_low - low
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+
+    atr = calculate_atr(high, low, close, period)
+    plus_di = 100 * plus_dm.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean() / atr.replace(0, np.nan)
+    minus_di = 100 * minus_dm.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean() / atr.replace(0, np.nan)
+    dx = ((plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)) * 100
+    adx = dx.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    return adx, plus_di, minus_di
 
 
 def calculate_obv_sma(obv: pd.Series, period: int = OBV_SMA_PERIOD) -> pd.Series:
@@ -205,6 +243,18 @@ def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     result["sma_short"] = calculate_sma(close, SMA_SHORT)
     result["sma_long"] = calculate_sma(close, SMA_LONG)
 
+    # EMA dizilimleri
+    result["ema_fast"] = calculate_ema(close, EMA_FAST)
+    result["ema_signal"] = calculate_ema(close, EMA_SIGNAL)
+    result["ema20"] = calculate_ema(close, EMA_PERFECT_FAST)
+    result["ema50"] = calculate_ema(close, EMA_PERFECT_MID)
+    result["ema200"] = calculate_ema(close, EMA_PERFECT_SLOW)
+    result["perfect_order"] = (
+        (close > result["ema20"])
+        & (result["ema20"] > result["ema50"])
+        & (result["ema50"] > result["ema200"])
+    )
+
     # RSI
     result["rsi"] = calculate_rsi(close)
 
@@ -219,6 +269,16 @@ def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     result["bb_upper"] = upper
     result["bb_middle"] = middle
     result["bb_lower"] = lower
+    result["bb_width_pct"] = ((upper - lower) / middle.replace(0, np.nan)) * 100
+    width_window = min(120, max(BB_PERIOD, len(result)))
+    rolling_width = result["bb_width_pct"].rolling(width_window, min_periods=BB_PERIOD)
+    result["bb_width_p20"] = rolling_width.quantile(0.20)
+    result["squeeze_on"] = result["bb_width_pct"] <= result["bb_width_p20"]
+    result["squeeze_breakout"] = (
+        result["squeeze_on"].shift(1).fillna(False)
+        & (close > upper)
+        & (volume > result["volume"].rolling(VOLUME_AVG_PERIOD, min_periods=VOLUME_SHORT_PERIOD).mean())
+    )
 
     # OBV
     result["obv"] = calculate_obv(close, volume)
@@ -227,6 +287,11 @@ def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # ATR (volatilite — stop/hedef için)
     result["atr"] = calculate_atr(result["high"], result["low"], close)
 
+    # ADX / DMI
+    result["adx"], result["plus_di"], result["minus_di"] = calculate_adx(
+        result["high"], result["low"], close,
+    )
+
     # Hacim ortalamaları
     result["volume_avg"] = volume.rolling(
         window=VOLUME_AVG_PERIOD, min_periods=VOLUME_AVG_PERIOD
@@ -234,6 +299,8 @@ def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     result["volume_short_avg"] = volume.rolling(
         window=VOLUME_SHORT_PERIOD, min_periods=VOLUME_SHORT_PERIOD
     ).mean()
+    result["v_kat"] = volume / result["volume_avg"].replace(0, np.nan)
+    result["ema_distance_pct"] = ((close - result["ema_fast"]) / result["ema_fast"].replace(0, np.nan)) * 100
 
     return result
 
@@ -260,6 +327,13 @@ def get_latest_indicators(df: pd.DataFrame) -> dict:
         # SMA
         "sma_short": last.get("sma_short", np.nan),
         "sma_long": last.get("sma_long", np.nan),
+        # EMA / Morpheus dizilimleri
+        "ema_fast": last.get("ema_fast", np.nan),
+        "ema_signal": last.get("ema_signal", np.nan),
+        "ema20": last.get("ema20", np.nan),
+        "ema50": last.get("ema50", np.nan),
+        "ema200": last.get("ema200", np.nan),
+        "perfect_order": bool(last.get("perfect_order", False)),
         # RSI
         "rsi": last.get("rsi", np.nan),
         # MACD
@@ -271,12 +345,22 @@ def get_latest_indicators(df: pd.DataFrame) -> dict:
         "bb_upper": last.get("bb_upper", np.nan),
         "bb_middle": last.get("bb_middle", np.nan),
         "bb_lower": last.get("bb_lower", np.nan),
+        "bb_width_pct": last.get("bb_width_pct", np.nan),
+        "bb_width_p20": last.get("bb_width_p20", np.nan),
+        "squeeze_on": bool(last.get("squeeze_on", False)),
+        "squeeze_breakout": bool(last.get("squeeze_breakout", False)),
         # OBV
         "obv": last.get("obv", np.nan),
         "obv_sma": last.get("obv_sma", np.nan),
+        # ADX
+        "adx": last.get("adx", np.nan),
+        "plus_di": last.get("plus_di", np.nan),
+        "minus_di": last.get("minus_di", np.nan),
         # Hacim
         "volume_avg": last.get("volume_avg", np.nan),
         "volume_short_avg": last.get("volume_short_avg", np.nan),
+        "v_kat": last.get("v_kat", np.nan),
+        "ema_distance_pct": last.get("ema_distance_pct", np.nan),
         # ATR (stop/hedef için)
         "atr": last.get("atr", np.nan),
         # Son 20 gün swing seviyeleri (destek/direnç)

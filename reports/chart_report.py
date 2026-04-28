@@ -38,7 +38,13 @@ plt.rcParams.update({
     "font.size": 9,
 })
 
-SIGNAL_COLORS_MAP = {"AL": "#00ff88", "SAT": "#ff4444", "BEKLE": "#ffaa00"}
+SIGNAL_COLORS_MAP = {
+    "GÜÇLÜ AL": "#00ff88",
+    "AL": "#00ff88",
+    "SAT": "#ff4444",
+    "BEKLE": "#ffaa00",
+    "KAR AL": "#d946ef",
+}
 
 
 def _ensure_output_dir() -> Path:
@@ -57,26 +63,29 @@ def generate_table_image(
     date_str = datetime.now().strftime(REPORT_DATE_FORMAT)
     filepath = output_dir / f"bist_table_{date_str}.png"
 
-    headers = ["#", "Hisse", "Fiyat", "Skor", "Sinyal", "RSI", "Trend", "Hacim"]
+    headers = ["#", "Hisse", "Fiyat", "Skor", "Aksiyon", "WR%", "ADX", "V/K", "DZL", "SQZ"]
     rows = []
     cell_colors = []
 
     for i, sig in enumerate(signals, 1):
         price_str = f"{sig.price:,.2f}" if sig.price < 1000 else f"{sig.price:,.0f}"
+        metrics = sig.score_breakdown
         row = [
             str(i),
             sig.symbol,
             price_str,
             f"{sig.score:.0f}",
-            sig.signal,
-            f"{sig.rsi:.0f}",
-            sig.trend,
-            sig.volume_status,
+            sig.action or sig.signal,
+            f"{metrics.wr_pct:.0f}",
+            f"{metrics.adx:.0f}",
+            f"{metrics.v_kat:.1f}",
+            "OK" if metrics.dzl_ok else "--",
+            "OK" if metrics.sqz_ok else "--",
         ]
         rows.append(row)
 
         # Satır rengi sinyale göre
-        sig_color = SIGNAL_COLORS_MAP.get(sig.signal, "#ffaa00")
+        sig_color = SIGNAL_COLORS_MAP.get(sig.action or sig.signal, "#ffaa00")
         base_alpha = "33"  # %20 opaklık
         row_color = [sig_color + base_alpha] * len(headers)
         cell_colors.append(row_color)

@@ -26,7 +26,13 @@ _term_size = shutil.get_terminal_size((140, 40))
 _TERM_WIDTH = max(_term_size.columns, 140)
 console = Console(force_terminal=True, width=_TERM_WIDTH)
 
-SIGNAL_COLORS = {"AL": "bold green", "SAT": "bold red", "BEKLE": "bold yellow"}
+SIGNAL_COLORS = {
+    "GÜÇLÜ AL": "bold green",
+    "AL": "bold green",
+    "SAT": "bold red",
+    "BEKLE": "bold yellow",
+    "KAR AL": "bold magenta",
+}
 SHORT_SIGNAL_COLORS = {"AL": "green", "SAT": "red", "BEKLE": "yellow"}
 REGIME_STYLES = {
     "YUKSELIS": ("bold white on green", "▲"),
@@ -70,65 +76,49 @@ def print_signals_table(signals: list[Signal]) -> None:
         padding=(0, 1), expand=False,
     )
 
-    table.add_column("#", style="dim", width=4, justify="right")
+    table.add_column("#", style="dim", width=3, justify="right")
     table.add_column("HİSSE", style="bold", width=7)
-    table.add_column("FİYAT", justify="right", width=10)
-    table.add_column("SKOR", justify="center", width=5)
-    table.add_column("GÜN", justify="center", width=5)
-    table.add_column("HFT", justify="center", width=5)
-    table.add_column("AY", justify="center", width=5)
-    table.add_column("YIL", justify="center", width=5)
-    table.add_column("RSI", justify="right", width=5)
-    table.add_column("MUM", justify="center", width=8)
-    table.add_column("EW", justify="center", width=5)
-    table.add_column("HACİM", justify="center", width=8)
+    table.add_column("FİYAT", justify="right", width=9)
+    table.add_column("SKOR", justify="right", width=6)
+    table.add_column("AKSİYON", justify="center", width=9)
+    table.add_column("NEDEN", width=22)
+    table.add_column("WR%", justify="right", width=6)
+    table.add_column("ADX", justify="right", width=5)
+    table.add_column("V/K", justify="right", width=5)
+    table.add_column("DZL", justify="center", width=4)
+    table.add_column("SQZ", justify="center", width=4)
+    table.add_column("STOP", justify="right", width=9)
+    table.add_column("HEDEF", justify="right", width=9)
 
     for i, sig in enumerate(signals, 1):
-        if sig.score >= 65:
+        if sig.score >= 170:
             score_style = "bold green"
-        elif sig.score <= 35:
+        elif sig.score <= 90:
             score_style = "bold red"
         else:
             score_style = "bold yellow"
 
-        rsi_style = "red" if sig.rsi > 70 else ("green" if sig.rsi < 30 else "white")
-        vol_style = {"YÜKSEK": "green", "NORMAL": "white", "DÜŞÜK": "red"}.get(sig.volume_status, "white")
-
-        tf = sig.timeframes
-        daily_t = _short_sig(tf.daily) if tf else _short_sig(sig.signal)
-        weekly_t = _short_sig(tf.weekly) if tf else "---"
-        monthly_t = _short_sig(tf.monthly) if tf else "---"
-        yearly_t = _short_sig(tf.yearly) if tf else "---"
-        d_c = SHORT_SIGNAL_COLORS.get(tf.daily if tf else sig.signal, "yellow")
-        w_c = SHORT_SIGNAL_COLORS.get(tf.weekly if tf else "BEKLE", "yellow")
-        m_c = SHORT_SIGNAL_COLORS.get(tf.monthly if tf else "BEKLE", "yellow")
-        y_c = SHORT_SIGNAL_COLORS.get(tf.yearly if tf else "BEKLE", "yellow")
-
-        # Mum bias kısaltma
-        bias = sig.candle_bias
-        bias_text = {"BULLISH": "YÜK↑", "BEARISH": "DÜŞ↓", "MIXED": "MIX~", "NEUTRAL": "NÖT", "NONE": "—"}
-        bias_style = {"BULLISH": "green", "BEARISH": "red", "MIXED": "yellow", "NEUTRAL": "dim", "NONE": "dim"}
-
-        # EW kısaltma
-        ew = sig.elliott_wave
-        ew_text = f"W{ew.current_wave}" if ew and ew.current_wave != "?" else "—"
-        ew_style = "cyan" if ew and ew.confidence in ("HIGH", "MEDIUM") else "dim"
-
         sym_style = "bold cyan" if sig.signal == "AL" else ("bold red" if sig.signal == "SAT" else "bold")
+        action = sig.action or sig.signal
+        reason = sig.reason_factors[0] if sig.reason_factors else sig.reason
+        reason = reason[:28] + "…" if len(reason) > 29 else reason
+        metrics = sig.score_breakdown
+        target = sig.targets.short_target if sig.targets else sig.target
 
         table.add_row(
             str(i),
             Text(sig.symbol, style=sym_style),
             _fp(sig.price),
             Text(f"{sig.score:.0f}", style=score_style),
-            Text(daily_t, style=d_c),
-            Text(weekly_t, style=w_c),
-            Text(monthly_t, style=m_c),
-            Text(yearly_t, style=y_c),
-            Text(f"{sig.rsi:.0f}", style=rsi_style),
-            Text(bias_text.get(bias, "—"), style=bias_style.get(bias, "dim")),
-            Text(ew_text, style=ew_style),
-            Text(sig.volume_status, style=vol_style),
+            Text(action, style=SIGNAL_COLORS.get(action, "yellow")),
+            reason,
+            f"{metrics.wr_pct:.0f}",
+            f"{metrics.adx:.0f}",
+            f"{metrics.v_kat:.1f}",
+            "OK" if metrics.dzl_ok else "--",
+            "OK" if metrics.sqz_ok else "--",
+            _fp(sig.stop_loss) if sig.stop_loss > 0 else "—",
+            _fp(target) if target > 0 else "—",
         )
 
     console.print()

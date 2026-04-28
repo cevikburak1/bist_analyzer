@@ -195,11 +195,19 @@ export function StockDetailView({ detail }: StockDetailViewProps) {
 
           <DetailCard title="Skor Dagilimi ve Riskler">
             <div className="space-y-3 text-sm text-slate-300">
-              <div>Trend: <span className="text-slate-100">{signal.score_breakdown.trend.toFixed(1)}</span></div>
-              <div>Momentum: <span className="text-slate-100">{signal.score_breakdown.momentum.toFixed(1)}</span></div>
-              <div>Hacim: <span className="text-slate-100">{signal.score_breakdown.volume.toFixed(1)}</span></div>
+              <div>Trendin yonu ve gucu: <span className="text-slate-100">{signal.score_breakdown.trend.toFixed(1)}</span></div>
+              <div>Momentum ve trend kuvveti: <span className="text-slate-100">{signal.score_breakdown.momentum.toFixed(1)}</span></div>
+              <div>Hacim patlamasi ve para akisi: <span className="text-slate-100">{signal.score_breakdown.volume.toFixed(1)}</span></div>
               <div>Fiyat pozisyonu: <span className="text-slate-100">{signal.score_breakdown.price_position.toFixed(1)}</span></div>
-              <div>Piyasa uyumu: <span className="text-slate-100">{signal.score_breakdown.market_regime.toFixed(1)}</span></div>
+              <div>Sikisma ve kirilim potansiyeli: <span className="text-slate-100">{(signal.score_breakdown.squeeze_breakout ?? 0).toFixed(1)}</span></div>
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-950/70 p-3 text-xs">
+                <div>WR%: <span className="text-slate-100">{(signal.score_breakdown.wr_pct ?? 0).toFixed(0)}</span></div>
+                <div>ADX: <span className="text-slate-100">{(signal.score_breakdown.adx ?? 0).toFixed(1)}</span></div>
+                <div>V/K: <span className="text-slate-100">{(signal.score_breakdown.v_kat ?? 0).toFixed(2)}</span></div>
+                <div>DZL: <span className="text-slate-100">{signal.score_breakdown.dzl_ok ? "OK" : "--"}</span></div>
+                <div>SQZ: <span className="text-slate-100">{signal.score_breakdown.sqz_ok ? "OK" : "--"}</span></div>
+                <div>EMA uzaklik: <span className="text-slate-100">%{(signal.score_breakdown.ema_distance_pct ?? 0).toFixed(1)}</span></div>
+              </div>
               {signal.commentary.risks.length > 0 ? (
                 <div className="space-y-2 pt-2">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Risk notlari</div>

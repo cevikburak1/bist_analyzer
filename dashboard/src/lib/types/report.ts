@@ -77,7 +77,16 @@ export type ScoreBreakdown = {
   momentum: number;
   volume: number;
   price_position: number;
-  market_regime: number;
+  squeeze_breakout: number;
+  wr_pct: number;
+  wr_samples: number;
+  adx: number;
+  v_kat: number;
+  dzl_ok: boolean;
+  sqz_ok: boolean;
+  ema_distance_pct: number;
+  overextended: boolean;
+  details: Record<string, unknown>;
 };
 
 export type HorizonVerdict = {
@@ -361,6 +370,7 @@ export type ReportSignal = {
   price: number;
   score: number;
   signal_daily: string;
+  action: string;
   summary: string;
   timeframes: Timeframes;
   trend: string;
@@ -407,8 +417,19 @@ export type StockSeriesPoint = {
   volume: number | null;
   sma_short: number | null;
   sma_long: number | null;
+  ema_fast: number | null;
+  ema_signal: number | null;
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
   bb_upper: number | null;
   bb_lower: number | null;
+  bb_width_pct: number | null;
+  adx: number | null;
+  v_kat: number | null;
+  perfect_order: boolean | null;
+  squeeze_on: boolean | null;
+  squeeze_breakout: boolean | null;
   rsi: number | null;
   anka_body: number | null;
   anka_upper_wing: number | null;

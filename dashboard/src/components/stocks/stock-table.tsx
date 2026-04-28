@@ -7,21 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPrice } from "@/lib/formatters";
-import type { ReportSignal, HorizonKey, HorizonScore } from "@/lib/types/report";
+import type { ReportSignal } from "@/lib/types/report";
 import { SignalBadge } from "@/components/stocks/signal-badge";
-import { HORIZON_OPTIONS, useHorizon } from "@/lib/horizon-context";
 
-type SortKey =
-  | "symbol"
-  | "score"
-  | "price"
-  | "fairValue"
-  | "fairMargin"
-  | "rsi"
-  | "stopLoss"
-  | "shortTarget"
-  | "mediumTarget"
-  | "longTarget";
+type SortKey = "symbol" | "score" | "price" | "wr" | "adx" | "vkat" | "stopLoss" | "target";
 
 type StockTableProps = {
   signals: ReportSignal[];
@@ -34,66 +23,42 @@ type StockTableProps = {
 
 const PAGE_SIZE = 25;
 
-type HorizonView = {
-  score: number;
-  decision: string;
-  stop: number;
-  target: number;
-  rr: number;
-  isIndicative: boolean;
-};
-
-function getHorizonView(signal: ReportSignal, horizon: HorizonKey): HorizonView {
-  const scoreSet = signal.horizon_scores;
-  if (scoreSet) {
-    const hs: HorizonScore | undefined = scoreSet[horizon];
-    if (hs) {
-      const t = hs.targets;
-      return {
-        score: hs.total,
-        decision: hs.decision,
-        stop: t?.stop_loss ?? 0,
-        target: t?.target_price ?? 0,
-        rr: t?.rr ?? 0,
-        isIndicative: !!t?.note,
-      };
-    }
-  }
-  return {
-    score: signal.score,
-    decision: signal.signal_daily,
-    stop: signal.targets.stop_loss || signal.stop_loss,
-    target: signal.targets.short_target,
-    rr: signal.targets.short_rr,
-    isIndicative: signal.signal_daily === "BEKLE",
-  };
+function getAction(signal: ReportSignal): string {
+  return signal.action || signal.signal_daily;
 }
 
-export function StockTable({ signals, fairValueBySymbol = {} }: StockTableProps) {
-  const { horizon, setHorizon } = useHorizon();
+function getTarget(signal: ReportSignal): number {
+  return signal.targets.short_target || signal.target;
+}
+
+function getStop(signal: ReportSignal): number {
+  return signal.targets.stop_loss || signal.stop_loss;
+}
+
+export function StockTable({ signals }: StockTableProps) {
   const [search, setSearch] = useState("");
   const [signalFilter, setSignalFilter] = useState("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
 
-  const horizonLabel =
-    HORIZON_OPTIONS.find((o) => o.value === horizon)?.label ?? "Gunluk";
-
   const filtered = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return signals.filter((signal) => {
+      const action = getAction(signal);
       const matchesSearch =
         !normalizedSearch ||
         signal.symbol.toLowerCase().includes(normalizedSearch) ||
         signal.commentary.summary.toLowerCase().includes(normalizedSearch) ||
         signal.reason.toLowerCase().includes(normalizedSearch);
 
-      const view = getHorizonView(signal, horizon);
-      const matchesSignal = signalFilter === "ALL" || view.decision === signalFilter;
+      const matchesSignal =
+        signalFilter === "ALL" ||
+        action === signalFilter ||
+        signal.signal_daily === signalFilter;
       return matchesSearch && matchesSignal;
     });
-  }, [search, signalFilter, signals, horizon]);
+  }, [search, signalFilter, signals]);
 
   const sorted = useMemo(() => {
     const next = [...filtered];
@@ -101,28 +66,23 @@ export function StockTable({ signals, fairValueBySymbol = {} }: StockTableProps)
       const multiplier = sortDirection === "asc" ? 1 : -1;
 
       const value = (signal: ReportSignal) => {
-        const view = getHorizonView(signal, horizon);
         switch (sortKey) {
           case "symbol":
             return signal.symbol;
           case "score":
-            return view.score;
+            return signal.score;
           case "price":
             return signal.price;
-          case "fairValue":
-            return fairValueBySymbol[signal.symbol]?.fairValue ?? 0;
-          case "fairMargin":
-            return fairValueBySymbol[signal.symbol]?.marginPct ?? -999;
-          case "rsi":
-            return signal.rsi;
+          case "wr":
+            return signal.score_breakdown.wr_pct ?? 0;
+          case "adx":
+            return signal.score_breakdown.adx ?? 0;
+          case "vkat":
+            return signal.score_breakdown.v_kat ?? 0;
           case "stopLoss":
-            return view.stop;
-          case "shortTarget":
-            return view.target;
-          case "mediumTarget":
-            return view.target;
-          case "longTarget":
-            return view.target;
+            return getStop(signal);
+          case "target":
+            return getTarget(signal);
         }
       };
 
@@ -136,7 +96,7 @@ export function StockTable({ signals, fairValueBySymbol = {} }: StockTableProps)
       return (((leftValue as number) ?? 0) - ((rightValue as number) ?? 0)) * multiplier;
     });
     return next;
-  }, [filtered, sortDirection, sortKey, horizon, fairValueBySymbol]);
+  }, [filtered, sortDirection, sortKey]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -163,38 +123,11 @@ export function StockTable({ signals, fairValueBySymbol = {} }: StockTableProps)
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">
-              Listeleme Vadesi
-            </div>
-            <div className="text-sm text-slate-200">
-              Skorlar ve AL/SAT/BEKLE kararları seçilen vadeye göre güncellenir
-            </div>
-          </div>
-          <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-slate-800">
-            {HORIZON_OPTIONS.map((opt) => {
-              const active = opt.value === horizon;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    setHorizon(opt.value);
-                    setPage(1);
-                  }}
-                  className={`flex flex-col items-center px-4 py-2 text-xs transition ${
-                    active
-                      ? "bg-cyan-500/15 text-cyan-200"
-                      : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
-                  }`}
-                >
-                  <span className="font-semibold">{opt.label}</span>
-                  <span className="text-[10px] text-slate-500">{opt.subtitle}</span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="text-xs uppercase tracking-wide text-slate-400">
+          Morpheus Puanlama
+        </div>
+        <div className="text-sm text-slate-200">
+          Perfect Order, WR%, ADX, hacim katı ve sıkışma/kırılım potansiyeline göre sıralanır
         </div>
       </div>
 
@@ -222,13 +155,13 @@ export function StockTable({ signals, fairValueBySymbol = {} }: StockTableProps)
             className="h-10 rounded-md border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
           >
             <option value="ALL">Tum sinyaller</option>
+            <option value="GÜÇLÜ AL">GÜÇLÜ AL</option>
             <option value="AL">AL</option>
+            <option value="KAR AL">KAR AL</option>
             <option value="SAT">SAT</option>
             <option value="BEKLE">BEKLE</option>
           </select>
-          <div className="text-sm text-slate-400">
-            {filtered.length} hisse | Vade: {horizonLabel}
-          </div>
+          <div className="text-sm text-slate-400">{filtered.length} hisse</div>
         </div>
       </div>
 
@@ -242,140 +175,94 @@ export function StockTable({ signals, fairValueBySymbol = {} }: StockTableProps)
                     Hisse {sortKey === "symbol" ? sortIcon : null}
                   </button>
                 </TableHead>
-                <TableHead className="text-center text-slate-300">{horizonLabel}</TableHead>
-                <TableHead className="text-center">
-                  <button type="button" className="mx-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("score")}>
-                    Skor ({horizonLabel}) {sortKey === "score" ? sortIcon : null}
-                  </button>
-                </TableHead>
                 <TableHead className="text-right">
                   <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("price")}>
                     Fiyat {sortKey === "price" ? sortIcon : null}
                   </button>
                 </TableHead>
+                <TableHead className="text-center">
+                  <button type="button" className="mx-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("score")}>
+                    Skor {sortKey === "score" ? sortIcon : null}
+                  </button>
+                </TableHead>
+                <TableHead className="text-center text-slate-300">Aksiyon</TableHead>
+                <TableHead className="text-slate-300">Neden</TableHead>
                 <TableHead className="text-right">
-                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("fairValue")}>
-                    Adil Değer {sortKey === "fairValue" ? sortIcon : null}
+                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("wr")}>
+                    WR% {sortKey === "wr" ? sortIcon : null}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
-                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("fairMargin")}>
-                    İsk/Prim {sortKey === "fairMargin" ? sortIcon : null}
+                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("adx")}>
+                    ADX {sortKey === "adx" ? sortIcon : null}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
-                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("rsi")}>
-                    RSI {sortKey === "rsi" ? sortIcon : null}
+                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("vkat")}>
+                    V/K {sortKey === "vkat" ? sortIcon : null}
                   </button>
                 </TableHead>
+                <TableHead className="text-center text-slate-300">DZL</TableHead>
+                <TableHead className="text-center text-slate-300">SQZ</TableHead>
                 <TableHead className="text-right">
                   <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("stopLoss")}>
-                    Stop ({horizonLabel}) {sortKey === "stopLoss" ? sortIcon : null}
+                    Stop {sortKey === "stopLoss" ? sortIcon : null}
                   </button>
                 </TableHead>
-                <TableHead className="text-right text-slate-300">
-                  Hedef ({horizonLabel})
+                <TableHead className="text-right">
+                  <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("target")}>
+                    Hedef {sortKey === "target" ? sortIcon : null}
+                  </button>
                 </TableHead>
-                <TableHead className="text-center text-slate-300">R/O</TableHead>
-                <TableHead className="text-slate-300">Fib</TableHead>
-                <TableHead className="text-slate-300">Mum</TableHead>
-                <TableHead className="text-slate-300">Yorum</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {pageData.map((signal) => {
-                const view = getHorizonView(signal, horizon);
-                const fair = fairValueBySymbol[signal.symbol];
+                const action = getAction(signal);
+                const metrics = signal.score_breakdown;
+                const stop = getStop(signal);
+                const target = getTarget(signal);
                 return (
-                <TableRow key={signal.symbol} className="border-slate-800 hover:bg-slate-900/60">
-                  <TableCell>
-                    <div className="flex flex-col">
+                  <TableRow key={signal.symbol} className="border-slate-800 hover:bg-slate-900/60">
+                    <TableCell>
                       <Link href={`/hisse/${signal.symbol}`} className="font-semibold text-cyan-300 hover:text-cyan-200">
                         {signal.symbol}
                       </Link>
-                      <span className="text-xs text-slate-500">
-                        {signal.timeframes.weekly || "-"} / {signal.timeframes.monthly || "-"} / {signal.timeframes.yearly || "-"}
+                    </TableCell>
+                    <TableCell className="text-right text-slate-200">{formatPrice(signal.price)}</TableCell>
+                    <TableCell className="text-center">
+                      <span
+                        className={
+                          signal.score >= 170
+                            ? "font-semibold text-emerald-300"
+                            : signal.score <= 90
+                              ? "font-semibold text-rose-300"
+                              : "font-semibold text-amber-200"
+                        }
+                      >
+                        {signal.score.toFixed(1)}
                       </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <SignalBadge signal={view.decision} />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span
-                      className={
-                        view.score >= 65
-                          ? "font-semibold text-emerald-300"
-                          : view.score <= 35
-                            ? "font-semibold text-rose-300"
-                            : "font-semibold text-amber-200"
-                      }
-                    >
-                      {view.score.toFixed(1)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right text-slate-200">{formatPrice(signal.price)}</TableCell>
-                  <TableCell className="text-right text-blue-100">
-                    {fair?.fairValue ? (
-                      <Link href={`/fair-value/${signal.symbol}`} className="hover:text-blue-200">
-                        {formatPrice(fair.fairValue)}
-                      </Link>
-                    ) : "-"}
-                    <div className="text-[10px] text-slate-500">{fair?.confidence ?? ""}</div>
-                  </TableCell>
-                  <TableCell
-                    className={`text-right font-medium ${
-                      (fair?.marginPct ?? 0) >= 20
-                        ? "text-emerald-300"
-                        : (fair?.marginPct ?? 0) <= -20
-                          ? "text-rose-300"
-                          : "text-amber-200"
-                    }`}
-                  >
-                    {fair?.marginPct === null || fair?.marginPct === undefined
-                      ? "-"
-                      : `${fair.marginPct >= 0 ? "+" : ""}${fair.marginPct.toFixed(1)}%`}
-                  </TableCell>
-                  <TableCell className="text-right text-slate-300">{signal.rsi.toFixed(1)}</TableCell>
-                  <TableCell
-                    className={`text-right ${
-                      view.isIndicative ? "text-rose-400/60 italic" : "text-rose-300"
-                    }`}
-                    title={view.isIndicative ? "Bu vadede aktif giris onerilmez (gosterici seviye)" : undefined}
-                  >
-                    {view.stop > 0 ? formatPrice(view.stop) : "-"}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right text-xs ${
-                      view.isIndicative ? "text-emerald-400/60 italic" : "text-emerald-300"
-                    }`}
-                    title={view.isIndicative ? "Bu vadede aktif giris onerilmez (gosterici seviye)" : undefined}
-                  >
-                    {view.target > 0 ? formatPrice(view.target) : "-"}
-                  </TableCell>
-                  <TableCell
-                    className={`text-center text-xs ${
-                      view.isIndicative ? "text-slate-500 italic" : "text-slate-300"
-                    }`}
-                  >
-                    {view.rr > 0 ? view.rr.toFixed(2) : "-"}
-                  </TableCell>
-                  <TableCell className="max-w-[220px] text-xs text-slate-300">
-                    <div>D: {formatPrice(signal.fibonacci.support)}</div>
-                    <div>R: {formatPrice(signal.fibonacci.resistance)}</div>
-                    <div className="text-slate-500">{signal.fibonacci.zone || "-"}</div>
-                  </TableCell>
-                  <TableCell className="max-w-[240px] text-xs text-slate-300">
-                    <div>{signal.candle_summary || "-"}</div>
-                    <div className="text-slate-500">{signal.candle_bias}</div>
-                  </TableCell>
-                  <TableCell className="max-w-[300px] text-xs text-slate-300">
-                    <div className="font-medium text-slate-100">{signal.commentary.summary || signal.summary}</div>
-                    <div className="truncate text-slate-500" title={signal.commentary.paragraph || signal.reason}>
-                      {signal.commentary.paragraph || signal.reason}
-                    </div>
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <SignalBadge signal={action} />
+                    </TableCell>
+                    <TableCell className="max-w-[280px] text-xs text-slate-300">
+                      <div className="truncate" title={signal.reason}>
+                        {signal.reason}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right text-slate-300">{(metrics.wr_pct ?? 0).toFixed(0)}</TableCell>
+                    <TableCell className="text-right text-slate-300">{(metrics.adx ?? 0).toFixed(1)}</TableCell>
+                    <TableCell className="text-right text-slate-300">{(metrics.v_kat ?? 0).toFixed(1)}</TableCell>
+                    <TableCell className="text-center text-xs font-semibold text-slate-300">
+                      {metrics.dzl_ok ? "OK" : "--"}
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-semibold text-slate-300">
+                      {metrics.sqz_ok ? "OK" : "--"}
+                    </TableCell>
+                    <TableCell className="text-right text-rose-300">{stop > 0 ? formatPrice(stop) : "-"}</TableCell>
+                    <TableCell className="text-right text-emerald-300">{target > 0 ? formatPrice(target) : "-"}</TableCell>
+                  </TableRow>
                 );
               })}
             </TableBody>

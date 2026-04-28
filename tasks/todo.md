@@ -35,3 +35,18 @@
 
 ## İnceleme
 - AMD Model Engine için intraday yfinance/cache hattı, Python AMD motoru, web snapshot alanları ve `/amd-model` + `/amd-model/[symbol]` dashboard sayfaları eklendi. `python main.py --symbols THYAO ASELS --force-download --no-html --no-charts`, AMD JSON kontrolü, `npm run lint`, `npm run build` ve route HTTP kontrolleri geçti.
+
+## Morpheus Scoring
+- [x] EMA13/20/21/50/200, ADX, V_KAT ve Bollinger sıkışma göstergelerini ekle.
+- [x] Ana teknik skoru additive Morpheus modeline geçir.
+- [x] AL/SAT/BEKLE aksiyonlarını Morpheus skor, WR%, ADX, V_KAT ve aşırı EMA uzaklığına göre yeniden kalibre et.
+- [x] Web snapshot, CSV/JSON, terminal, HTML ve PNG raporlarına Morpheus metriklerini ekle.
+- [x] Dashboard ana tablo ve detay skor dağılımını Morpheus kolonlarıyla güncelle.
+- [x] Python testleri, dashboard lint/type check ve sentetik sinyal doğrulamasını çalıştır.
+- [x] Eski 0-100 vade skor çıktısını yeni snapshot için kapat; ana teknik yüzeylerde yalnızca Morpheus skoru kalsın.
+- [x] BEKLE/KAR AL dahil tüm hisseler için stop/hedef seviyelerini üret.
+- [x] ATR eksik veya yetersiz olduğunda stop/hedef için swing aralığı ya da fiyat yüzdesi fallback'i kullan.
+- [x] `output/web/latest_report.json` yeniden üretildi ve 499/499 hissede stop/hedef dolu olduğu doğrulandı.
+
+## İnceleme
+- Morpheus Scoring için ana teknik puanlama artık 0-100 piyasa rejimi ağırlıklı model yerine 100 üstüne çıkabilen additive skor üretiyor. Eski vade skor paneli yeni snapshot'ta üretilmiyor; BEKLE/KAR AL dahil tüm hisselerde stop/hedef doluyor. ATR eksikse swing aralığı, o da yoksa fiyatın %3'ü ile fallback hedef/stop üretiliyor. `output/web/latest_report.json` yeniden üretildi ve eksik stop/hedef sayısı 0 olarak doğrulandı. `pytest`, `npm run lint`, `npx tsc --noEmit`, `compileall` ve sentetik sinyal doğrulamaları geçti; snapshot sonrası tekrar test/lint denemesi kullanıcı tarafından kesildi.

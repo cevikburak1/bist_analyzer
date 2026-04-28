@@ -6,6 +6,7 @@ tek sayfalık HTML raporu üretir.
 """
 
 import logging
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -19,7 +20,13 @@ from config import OUTPUT_DIR, REPORT_DATE_FORMAT
 
 logger = logging.getLogger(__name__)
 
-SIGNAL_COLORS = {"AL": "#00ff88", "SAT": "#ff4444", "BEKLE": "#ffaa00"}
+SIGNAL_COLORS = {
+    "GÜÇLÜ AL": "#00ff88",
+    "AL": "#00ff88",
+    "SAT": "#ff4444",
+    "BEKLE": "#ffaa00",
+    "KAR AL": "#d946ef",
+}
 
 
 def _build_summary_table(signals: list[Signal], regime: MarketRegime) -> str:
@@ -64,11 +71,22 @@ def _build_data_table(signals: list[Signal]) -> str:
     rows_js = []
     for sig in signals:
         price_str = f"{sig.price:,.2f}" if sig.price < 1000 else f"{sig.price:,.0f}"
-        rows_js.append(
-            f'["{sig.symbol}", "{price_str}", {sig.score:.1f}, '
-            f'"{sig.signal}", {sig.rsi:.1f}, "{sig.trend}", '
-            f'"{sig.volume_status}", "{sig.reason}"]'
-        )
+        metrics = sig.score_breakdown
+        target = sig.targets.short_target if sig.targets else sig.target
+        rows_js.append([
+            sig.symbol,
+            price_str,
+            round(sig.score, 1),
+            sig.action or sig.signal,
+            sig.reason,
+            round(metrics.wr_pct, 1),
+            round(metrics.adx, 1),
+            round(metrics.v_kat, 2),
+            "OK" if metrics.dzl_ok else "--",
+            "OK" if metrics.sqz_ok else "--",
+            f"{sig.stop_loss:.2f}",
+            f"{target:.2f}",
+        ])
 
     return f"""
     <div style="margin-bottom:15px;">
@@ -90,18 +108,22 @@ def _build_data_table(signals: list[Signal]) -> str:
                 <th style="padding:10px; text-align:left; cursor:pointer;" onclick="sortTable(0)">Hisse ⇅</th>
                 <th style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(1)">Fiyat ⇅</th>
                 <th style="padding:10px; text-align:center; cursor:pointer;" onclick="sortTable(2)">Skor ⇅</th>
-                <th style="padding:10px; text-align:center;">Sinyal</th>
-                <th style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(4)">RSI ⇅</th>
-                <th style="padding:10px; text-align:center;">Trend</th>
-                <th style="padding:10px; text-align:center;">Hacim</th>
-                <th style="padding:10px; text-align:left;">Sebep</th>
+                <th style="padding:10px; text-align:center;">Aksiyon</th>
+                <th style="padding:10px; text-align:left;">Neden</th>
+                <th style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(5)">WR% ⇅</th>
+                <th style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(6)">ADX ⇅</th>
+                <th style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(7)">V/K ⇅</th>
+                <th style="padding:10px; text-align:center;">DZL</th>
+                <th style="padding:10px; text-align:center;">SQZ</th>
+                <th style="padding:10px; text-align:right;">Stop</th>
+                <th style="padding:10px; text-align:right;">Hedef</th>
             </tr>
         </thead>
         <tbody id="tableBody"></tbody>
     </table>
     <script>
-    const allRows = [{", ".join(rows_js)}];
-    const signalColors = {{"AL": "#00ff88", "SAT": "#ff4444", "BEKLE": "#ffaa00"}};
+    const allRows = {json.dumps(rows_js, ensure_ascii=False)};
+    const signalColors = {{"GÜÇLÜ AL": "#00ff88", "AL": "#00ff88", "SAT": "#ff4444", "BEKLE": "#ffaa00", "KAR AL": "#d946ef"}};
 
     function renderTable(data) {{
         const tbody = document.getElementById("tableBody");
@@ -121,10 +143,14 @@ def _build_data_table(signals: list[Signal]) -> str:
                                  padding:2px 10px; border-radius:12px;">${{r[2]}}</span>
                 </td>
                 <td style="padding:8px; text-align:center; color:${{sigColor}}; font-weight:bold;">${{r[3]}}</td>
-                <td style="padding:8px; text-align:right;">${{r[4]}}</td>
-                <td style="padding:8px; text-align:center;">${{r[5]}}</td>
-                <td style="padding:8px; text-align:center;">${{r[6]}}</td>
-                <td style="padding:8px; color:#888; font-size:11px;">${{r[7]}}</td>
+                <td style="padding:8px; color:#888; font-size:11px;">${{r[4]}}</td>
+                <td style="padding:8px; text-align:right;">${{r[5]}}</td>
+                <td style="padding:8px; text-align:right;">${{r[6]}}</td>
+                <td style="padding:8px; text-align:right;">${{r[7]}}</td>
+                <td style="padding:8px; text-align:center;">${{r[8]}}</td>
+                <td style="padding:8px; text-align:center;">${{r[9]}}</td>
+                <td style="padding:8px; text-align:right;">${{r[10]}}</td>
+                <td style="padding:8px; text-align:right;">${{r[11]}}</td>
             `;
             tbody.appendChild(tr);
         }});

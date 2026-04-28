@@ -140,6 +140,7 @@ def save_csv_json(signals: list[Signal], regime: MarketRegime) -> tuple[Path, Pa
             "score": sig.score,
             "summary": sig.summary,
             "signal_daily": sig.signal,
+            "action": sig.action or sig.signal,
             "signal_weekly": tf.weekly if tf else "",
             "signal_monthly": tf.monthly if tf else "",
             "signal_yearly": tf.yearly if tf else "",
@@ -169,7 +170,14 @@ def save_csv_json(signals: list[Signal], regime: MarketRegime) -> tuple[Path, Pa
             "score_momentum": sig.score_breakdown.momentum,
             "score_volume": sig.score_breakdown.volume,
             "score_price_position": sig.score_breakdown.price_position,
-            "score_market_regime": sig.score_breakdown.market_regime,
+            "score_squeeze_breakout": sig.score_breakdown.squeeze_breakout,
+            "wr_pct": sig.score_breakdown.wr_pct,
+            "adx": sig.score_breakdown.adx,
+            "v_kat": sig.score_breakdown.v_kat,
+            "dzl_ok": sig.score_breakdown.dzl_ok,
+            "sqz_ok": sig.score_breakdown.sqz_ok,
+            "ema_distance_pct": sig.score_breakdown.ema_distance_pct,
+            "overextended": sig.score_breakdown.overextended,
         })
 
     df = pd.DataFrame(rows)
@@ -343,7 +351,7 @@ def run_pipeline(
     all_scores = {}
     for symbol, indicators in all_indicators.items():
         try:
-            score = calculate_score(indicators, regime)
+            score = calculate_score(indicators, regime, stock_data.get(symbol))
             all_scores[symbol] = score
         except Exception as e:
             logger.error("Skorlama hatası [%s]: %s", symbol, str(e))

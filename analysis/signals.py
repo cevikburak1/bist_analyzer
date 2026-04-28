@@ -31,10 +31,10 @@ from analysis.horizon_guidance import (
 )
 from analysis.horizon_scoring import (
     HorizonScoreSet,
-    calculate_horizon_score_set,
 )
 from config import (
     BUY_THRESHOLD,
+    STRONG_BUY_THRESHOLD,
     SELL_THRESHOLD,
     RSI_OVERBOUGHT,
     RSI_BUY_LOW,
@@ -53,7 +53,7 @@ class Signal:
     """Hisse sinyali — tüm analiz sonuçlarını taşır."""
     symbol: str
     signal: str           # "AL", "SAT", "BEKLE"
-    score: float          # 0-100
+    score: float          # additive Morpheus skoru
     score_breakdown: ScoreBreakdown
     price: float
     rsi: float
@@ -61,6 +61,7 @@ class Signal:
     volume_status: str    # "YÜKSEK", "NORMAL", "DÜŞÜK"
     reason: str
     indicators: dict
+    action: str = ""      # Morpheus tablo aksiyonu: AL / GÜÇLÜ AL / BEKLE / SAT / KAR AL
     # Risk yönetimi (eski)
     entry: float = 0.0
     stop_loss: float = 0.0
@@ -118,22 +119,51 @@ def _safe(val, default=0.0) -> float:
     return float(val)
 
 
-def calculate_stop_and_target(indicators: dict, signal: str) -> dict:
-    """ATR tabanlı stop-loss ve hedef."""
+def _target_direction(indicators: dict, signal: str) -> str:
+    if signal == "SAT":
+        return "SHORT"
+    if signal == "AL":
+        return "LONG"
+
     close = _safe(indicators.get("close"))
-    atr = _safe(indicators.get("atr"))
+    ema200 = _safe(indicators.get("ema200"))
+    slope = _safe(indicators.get("trend_slope"))
+    plus_di = _safe(indicators.get("plus_di"))
+    minus_di = _safe(indicators.get("minus_di"))
+    if (ema200 > 0 and close >= ema200) or slope >= 0 or plus_di >= minus_di:
+        return "LONG"
+    return "SHORT"
+
+
+def _effective_atr(close: float, atr: float, swing_low: float, swing_high: float) -> float:
+    if atr > 0:
+        return atr
+    if swing_high > swing_low > 0:
+        return max((swing_high - swing_low) / 4, close * 0.01)
+    if close > 0:
+        return close * 0.03
+    return 0.0
+
+
+def calculate_stop_and_target(indicators: dict, signal: str) -> dict:
+    """ATR tabanlı stop-loss ve hedef; tüm aksiyonlarda gösterge seviye üretir."""
+    close = _safe(indicators.get("close"))
     swing_low = _safe(indicators.get("swing_low_20"))
     swing_high = _safe(indicators.get("swing_high_20"))
+    atr = _effective_atr(close, _safe(indicators.get("atr")), swing_low, swing_high)
+    direction = _target_direction(indicators, signal)
 
     result = {"entry": close, "stop_loss": 0.0, "target": 0.0,
-              "risk_pct": 0.0, "reward_pct": 0.0, "rr_ratio": 0.0}
+              "risk_pct": 0.0, "reward_pct": 0.0, "rr_ratio": 0.0,
+              "direction": direction, "atr": atr}
 
     if close <= 0 or atr <= 0:
         return result
 
-    if signal == "AL":
+    if direction == "LONG":
         atr_stop = close - ATR_STOP_MULTIPLIER * atr
         stop = max(atr_stop, swing_low * 0.99) if swing_low > 0 else atr_stop
+        stop = min(stop, close * 0.98)
         target = close + ATR_TARGET_MULTIPLIER * atr
         risk, reward = close - stop, target - close
         result.update({
@@ -142,9 +172,10 @@ def calculate_stop_and_target(indicators: dict, signal: str) -> dict:
             "reward_pct": round((reward / close) * 100, 2) if close > 0 else 0.0,
             "rr_ratio": round(reward / risk, 2) if risk > 0 else 0.0,
         })
-    elif signal == "SAT":
+    else:
         atr_stop = close + ATR_STOP_MULTIPLIER * atr
         stop = min(atr_stop, swing_high * 1.01) if swing_high > 0 else atr_stop
+        stop = max(stop, close * 1.02)
         target = close - ATR_TARGET_MULTIPLIER * atr
         risk, reward = stop - close, close - target
         result.update({
@@ -188,24 +219,45 @@ def generate_signal(
 
     score_buy_ok = score >= BUY_THRESHOLD
     rsi_buy_ok = RSI_BUY_LOW <= rsi <= RSI_BUY_HIGH
-    above_sma_long = sma_long <= 0 or close > sma_long
-    volume_ok = vol_avg <= 0 or vol_short >= vol_avg * VOLUME_MULTIPLIER
+    above_ema200 = _safe(indicators.get("ema200")) <= 0 or close > _safe(indicators.get("ema200"))
+    volume_ok = _safe(indicators.get("v_kat")) >= 1.0 or vol_avg <= 0 or vol_short >= vol_avg * VOLUME_MULTIPLIER
+    overextended = bool(score_breakdown.overextended)
+    strong_confirmation = (
+        score >= STRONG_BUY_THRESHOLD
+        and score_breakdown.wr_pct >= 70
+        and score_breakdown.adx >= 25
+        and score_breakdown.v_kat >= 1.0
+    )
+    action = "BEKLE"
 
     # ── SAT kontrolleri ──
     if score <= SELL_THRESHOLD:
         signal = "SAT"
-        reason = f"Düşük skor ({score:.0f}/100 ≤ {SELL_THRESHOLD}) - SAT eşiği aşıldı"
+        action = "SAT"
+        reason = f"Düşük Morpheus skor ({score:.0f} ≤ {SELL_THRESHOLD}) - SAT eşiği aşıldı"
         reason_factors.append(f"Skor {score:.0f} ≤ SAT eşiği {SELL_THRESHOLD}")
     elif rsi > RSI_OVERBOUGHT and bb_upper > 0 and close > bb_upper:
-        signal = "SAT"
+        signal = "BEKLE"
+        action = "KAR AL"
         reason = (
             f"Aşırı alım: RSI {rsi:.0f} > {RSI_OVERBOUGHT} ve fiyat Bollinger üst "
-            f"band {bb_upper:.2f} üzerinde"
+            f"band {bb_upper:.2f} üzerinde - kar alma/geri çekilme riski"
         )
         reason_factors.append(f"RSI {rsi:.0f} > {RSI_OVERBOUGHT}")
         reason_factors.append("BB üst band kırılımı")
+    elif overextended and score_buy_ok:
+        signal = "BEKLE"
+        action = "KAR AL"
+        reason = (
+            f"Skor güçlü ({score:.0f}) ancak fiyat EMA13'ten "
+            f"%{score_breakdown.ema_distance_pct:.1f} uzak - lastik fazla gerilmiş"
+        )
+        reason_factors.append(
+            f"EMA13 uzaklığı %{score_breakdown.ema_distance_pct:.1f} > aşırı bölge"
+        )
     elif macd < macd_signal_val and sma_short > 0 and close < sma_short:
         signal = "SAT"
+        action = "SAT"
         reason = (
             "MACD signal'in altında ve fiyat SMA50 altında - "
             "kısa/orta vade trend bozulması"
@@ -213,20 +265,24 @@ def generate_signal(
         reason_factors.append("MACD < signal")
         reason_factors.append("Fiyat SMA50 altında")
     # ── AL kontrolleri ──
-    elif score_buy_ok and rsi_buy_ok and above_sma_long and volume_ok:
+    elif score_buy_ok and rsi_buy_ok and above_ema200 and volume_ok:
         signal = "AL"
+        action = "GÜÇLÜ AL" if strong_confirmation else "AL"
         reason = (
-            f"Güçlü skor ({score:.0f}/100 ≥ {BUY_THRESHOLD}), RSI sağlıklı bantta, "
-            "fiyat 200 SMA üstünde ve hacim ortalamanın üstünde - tüm AL koşulları sağlandı"
+            f"Morpheus skor güçlü ({score:.0f} ≥ {BUY_THRESHOLD}), RSI sağlıklı bantta, "
+            "fiyat EMA200 üstünde ve hacim teyitli - AL koşulları sağlandı"
         )
         reason_factors.extend([
             f"Skor {score:.0f} ≥ AL eşiği {BUY_THRESHOLD}",
             f"RSI {rsi:.0f} ∈ [{RSI_BUY_LOW},{RSI_BUY_HIGH}]",
-            "Fiyat 200 SMA üstünde",
+            "Fiyat EMA200 üstünde",
             "Hacim AL eşiğini karşılıyor",
         ])
+        if strong_confirmation:
+            reason_factors.append("WR%, ADX ve V_KAT güçlü teyit veriyor")
         if should_filter_buy_signals(market_regime):
             signal = "BEKLE"
+            action = "BEKLE"
             reason = (
                 f"AL koşulları sağlandı (skor {score:.0f}) ancak piyasa rejimi "
                 f"'{market_regime.label}' - düşüş rejiminde AL filtreleniyor"
@@ -234,26 +290,27 @@ def generate_signal(
             reason_factors.append(f"Piyasa rejimi filtresi: {market_regime.label}")
     # ── BEKLE ──
     else:
+        action = "BEKLE"
         if score_buy_ok:
             missing: list[str] = []
             if not rsi_buy_ok:
                 missing.append(f"RSI {rsi:.0f} alım bandı [{RSI_BUY_LOW},{RSI_BUY_HIGH}] dışında")
-            if not above_sma_long:
-                missing.append("fiyat 200 SMA altında")
+            if not above_ema200:
+                missing.append("fiyat EMA200 altında")
             if not volume_ok:
                 missing.append("hacim AL eşiğini karşılamıyor")
             reason = (
-                f"Skor yeterli ({score:.0f}/100) ama AL için eksik: " + ", ".join(missing)
+                f"Skor yeterli ({score:.0f}) ama AL için eksik: " + ", ".join(missing)
             )
             reason_factors.extend(missing)
         else:
             reason = (
-                f"Skor orta ({score:.0f}/100) - AL eşiği {BUY_THRESHOLD}, "
+                f"Morpheus skor orta ({score:.0f}) - AL eşiği {BUY_THRESHOLD}, "
                 f"SAT eşiği {SELL_THRESHOLD}; her iki tarafa da net sinyal yok"
             )
             reason_factors.append(f"Skor {score:.0f} aralığı [{SELL_THRESHOLD+1},{BUY_THRESHOLD-1}]")
 
-    # ── Stop / Hedef (eski sistem) ──
+    # ── Stop / Hedef ──
     risk_data = calculate_stop_and_target(indicators, signal)
 
     # ── Çoklu zaman dilimi ──
@@ -323,8 +380,11 @@ def generate_signal(
     # ── 3 Vadeli Hedefler ──
     tgt = TargetLevels(stop_loss=risk_data["stop_loss"])
     try:
-        tgt = calculate_targets(close, _safe(indicators.get("atr")),
-                                risk_data["stop_loss"], fib, signal)
+        target_signal = signal if signal in {"AL", "SAT"} else (
+            "AL" if risk_data.get("direction") == "LONG" else "SAT"
+        )
+        tgt = calculate_targets(close, _safe(risk_data.get("atr")),
+                                risk_data["stop_loss"], fib, target_signal)
     except Exception as e:
         logger.warning("Hedef hesaplama hatası [%s]: %s", symbol, str(e))
 
@@ -337,14 +397,8 @@ def generate_signal(
     except Exception as e:
         logger.warning("Vade önerisi hatası [%s]: %s", symbol, str(e))
 
-    # ── Vade bazlı skorlar (kısa/swing/orta/uzun) ──
+    # Eski vade bazlı skor motoru 0-100 kategorilere dayanıyordu; ana çıktı yalnızca Morpheus skoru taşır.
     horizon_scores: Optional[HorizonScoreSet] = None
-    if df is not None:
-        try:
-            beta = float(indicators.get("beta", 1.0) or 1.0)
-            horizon_scores = calculate_horizon_score_set(df, market_regime, beta)
-        except Exception as e:
-            logger.warning("Vade skorlama hatası [%s]: %s", symbol, str(e))
 
     # ── Yorum ──
     comm = Commentary()
@@ -367,6 +421,7 @@ def generate_signal(
         volume_status=vol_status,
         reason=reason,
         indicators=indicators,
+        action=action,
         entry=risk_data["entry"],
         stop_loss=risk_data["stop_loss"],
         target=risk_data["target"],
