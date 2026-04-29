@@ -14,8 +14,21 @@ function getWebOutputDir(): string {
   return path.join(getOutputDir(), "web");
 }
 
+function getSeedReportPath(): string {
+  return path.join(process.cwd(), "src", "data", "seed-report.json");
+}
+
 function readJsonFile<T>(filePath: string): T {
   return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
+}
+
+function loadSeedReport(): ReportData | null {
+  const seedPath = getSeedReportPath();
+  if (!fs.existsSync(seedPath)) {
+    return null;
+  }
+
+  return readJsonFile<ReportData>(seedPath);
 }
 
 function emptyReport(): ReportData {
@@ -48,6 +61,11 @@ export function loadLatestReport(): ReportData {
   const webReportPath = path.join(getWebOutputDir(), "latest_report.json");
   if (fs.existsSync(webReportPath)) {
     return readJsonFile<ReportData>(webReportPath);
+  }
+
+  const seedReport = loadSeedReport();
+  if (seedReport) {
+    return seedReport;
   }
 
   const outputDir = getOutputDir();
@@ -88,11 +106,24 @@ export function loadStockDetail(symbol: string): StockDetailData {
   const normalized = symbol.toUpperCase().replace(".IS", "");
   const filePath = path.join(getWebOutputDir(), "stocks", `${normalized}.json`);
 
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Stock detail not found for ${normalized}`);
+  if (fs.existsSync(filePath)) {
+    return readJsonFile<StockDetailData>(filePath);
   }
 
-  return readJsonFile<StockDetailData>(filePath);
+  const seedReport = loadSeedReport();
+  const seedSignal = seedReport?.signals.find((signal) => signal.symbol === normalized);
+  if (seedReport && seedSignal) {
+    return {
+      generated_at: seedReport.generated_at,
+      market_regime: seedReport.market_regime,
+      meta: seedReport.meta,
+      signal: seedSignal,
+      series: [],
+      intraday_series: [],
+    };
+  }
+
+  throw new Error(`Stock detail not found for ${normalized}`);
 }
 
 export function loadAnalysisStatus(): AnalysisStatus {
