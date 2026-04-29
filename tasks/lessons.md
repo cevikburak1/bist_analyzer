@@ -9,3 +9,4 @@
 - Docker deploy doğrulamasında kullanılmayan Python bağımlılıkları da build'i kırabilir; `requirements.txt` içine sadece gerçekten import edilen paketleri koy ve container build ile doğrula.
 - Render gibi platformlar `HOSTNAME` env değerini iç host olarak verebilir; Next.js public web servislerinde bind host için ayrı `BIND_HOST=0.0.0.0` kullan, platformun `HOSTNAME` değerine güvenme.
 - Render Free 512 MB RAM tam BIST runtime analizini taşıyamıyor; canlı dashboard için bundled seed snapshot kullan, full analizi localde veya ayrı worker/ücretli instance üzerinde çalıştır.
+- Ücretsiz canlı güncelleme için ağır Python analizini web instance içinde çalıştırma; GitHub Actions gibi scheduled runner `output/web` üretip ayrı `market-data` branch'ine yayınlasın, dashboard remote JSON okusun.

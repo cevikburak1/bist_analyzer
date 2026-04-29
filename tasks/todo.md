@@ -72,3 +72,14 @@
 
 ## İnceleme
 - Canlı dashboard boş liste yerine artık bundled seed snapshot üzerinden 499 hisselik son başarılı analizi gösteriyor. Render Free instance üzerinde `POST /api/analysis/refresh` artık `runtime-analysis-disabled` döndürerek tam BIST analizinin 512 MB RAM limitini tekrar aşmasını engelliyor. Full güncel analiz yerelde veya daha büyük bir worker/instance üzerinde çalıştırılmalı.
+
+## Scheduled Market Data
+- [x] GitHub Actions ile 15 dakikalık market data workflow eklendi.
+- [x] `market-data` branch'i workflow tarafından force-publish edilecek şekilde yapılandırıldı.
+- [x] Dashboard loader'ları remote `market-data` JSON'larını okuyacak, hata halinde local/seed fallback'e düşecek şekilde güncellendi.
+- [x] Data/status/refresh API route'ları async loader akışına uyarlandı.
+- [x] Workflow manuel tetiklendi ve başarıyla tamamlandı.
+- [x] Canlı `/api/data` 499 hisse, `/api/data/PEKGY` 120 günlük seri ve 180 intraday seri döndürdü.
+
+## İnceleme
+- Canlı veri güncelleme yükü Render Free üzerinden GitHub Actions'a taşındı. `Update Market Data` workflow'u `python main.py --quiet --no-charts --no-html` çalıştırıp `output/web` içeriğini `market-data` branch'ine yayınlıyor. Render dashboard artık raw GitHub JSON'larını okuyarak liste ve detay grafiklerini güncel veriden gösteriyor; Render üzerinde runtime analiz kapalı kalıyor.
