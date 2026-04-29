@@ -61,3 +61,14 @@
 
 ## İnceleme
 - Full-stack yayın için repo köküne Docker deploy akışı eklendi. Dashboard ilk deploy’da veri yokken boş snapshot ile açılıyor, refresh endpoint’i container içindeki Python venv üzerinden analiz başlatıyor. Render Free üzerinde servis canlıya alındı; ana sayfa ve veri API’si 200 döndü, public refresh endpoint’i analiz durumunu `running` olarak güncelledi. Render Free instance uykuya geçebilir ve tam BIST analizi ücretsiz kaynak limitleri nedeniyle uzun sürebilir.
+
+## Live Seed Data Fix
+- [x] Canlı ortamda boş liste sebebi doğrulandı: Render Free runtime analiz 512 MB limiti nedeniyle instance'ı düşürdü ve output snapshot oluşmadı.
+- [x] `dashboard/src/data/seed-report.json` ile 499 hisselik fallback snapshot eklendi.
+- [x] Dashboard loader, deploy ortamında `output/web/latest_report.json` yoksa seed snapshot dönecek şekilde güncellendi.
+- [x] Hisse detay endpoint'i seed sinyalinden minimal fallback dönecek şekilde güncellendi.
+- [x] Render Free üzerinde runtime full analiz varsayılan olarak kapatıldı.
+- [x] Canlı `/api/data` 499 hisse döndü ve ana sayfada toplam hisse 499 olarak doğrulandı.
+
+## İnceleme
+- Canlı dashboard boş liste yerine artık bundled seed snapshot üzerinden 499 hisselik son başarılı analizi gösteriyor. Render Free instance üzerinde `POST /api/analysis/refresh` artık `runtime-analysis-disabled` döndürerek tam BIST analizinin 512 MB RAM limitini tekrar aşmasını engelliyor. Full güncel analiz yerelde veya daha büyük bir worker/instance üzerinde çalıştırılmalı.
