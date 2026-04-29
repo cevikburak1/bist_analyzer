@@ -3,7 +3,7 @@ import { loadBuffettList } from "@/lib/buffett/loaders";
 
 export async function GET() {
   try {
-    return NextResponse.json(loadBuffettList(), {
+    return NextResponse.json(await loadBuffettList(), {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {

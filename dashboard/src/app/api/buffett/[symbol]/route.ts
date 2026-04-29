@@ -8,7 +8,7 @@ type RouteContext = {
 export async function GET(_: Request, context: RouteContext) {
   try {
     const { symbol } = await context.params;
-    return NextResponse.json(loadBuffettStock(symbol), {
+    return NextResponse.json(await loadBuffettStock(symbol), {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {

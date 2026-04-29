@@ -15,7 +15,7 @@ concurrency:
 jobs:
   update-market-data:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
 
     steps:
       - name: Checkout source
@@ -28,6 +28,16 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
+      - name: Restore market data caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/cache
+            data/cache_fundamentals
+          key: market-data-cache-${{ github.run_id }}
+          restore-keys: |
+            market-data-cache-
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
@@ -35,6 +45,12 @@ jobs:
 
       - name: Generate web snapshot
         run: python main.py --quiet --no-charts --no-html
+
+      - name: Generate Buffett and fair value snapshot
+        run: python buffett_main.py --quiet
+
+      - name: Generate silent accumulation snapshot
+        run: python silent_accumulation_main.py
 
       - name: Publish market data branch
         env:

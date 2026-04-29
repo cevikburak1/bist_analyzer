@@ -3,7 +3,7 @@ import { loadSilentAccumulation } from "@/lib/silent-accumulation/loaders";
 
 export async function GET() {
   try {
-    return NextResponse.json(loadSilentAccumulation(), {
+    return NextResponse.json(await loadSilentAccumulation(), {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
