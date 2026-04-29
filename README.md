@@ -250,6 +250,8 @@ The web service starts the Next.js dashboard from `dashboard/` and keeps the exi
 
 By default, `RUN_ANALYSIS_ON_STARTUP` is `0` so the free instance can boot quickly. Set it to `1` only if you want the container to generate a snapshot before the first dashboard start.
 
+Render Free has 512 MB RAM, so runtime analysis is disabled there unless `ENABLE_RUNTIME_ANALYSIS=1` is explicitly set. The dashboard falls back to the bundled seed snapshot while full analysis is run locally or on a larger worker.
+
 ---
 
 ## Additional Pipelines
