@@ -27,7 +27,7 @@ export async function POST() {
       });
     }
 
-    const status = loadAnalysisStatus();
+    const status = await loadAnalysisStatus({ preferRemote: false });
     if (status.state === "running") {
       return NextResponse.json({
         triggered: false,

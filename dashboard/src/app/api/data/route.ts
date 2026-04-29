@@ -3,7 +3,7 @@ import { loadLatestReport } from "@/lib/report/loaders";
 
 export async function GET() {
   try {
-    return NextResponse.json(loadLatestReport(), {
+    return NextResponse.json(await loadLatestReport(), {
       headers: {
         "Cache-Control": "no-store",
       },

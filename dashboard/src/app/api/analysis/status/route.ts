@@ -3,7 +3,7 @@ import { loadAnalysisStatus } from "@/lib/report/loaders";
 
 export async function GET() {
   try {
-    return NextResponse.json(loadAnalysisStatus(), {
+    return NextResponse.json(await loadAnalysisStatus(), {
       headers: {
         "Cache-Control": "no-store",
       },

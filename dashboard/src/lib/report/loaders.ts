@@ -2,6 +2,8 @@ import fs from "fs";
 import path from "path";
 import type { AnalysisStatus, ReportData, StockDetailData } from "@/lib/types/report";
 
+const DEFAULT_MARKET_DATA_BASE_URL = "https://raw.githubusercontent.com/cevikburak1/bist_analyzer/market-data";
+
 function getRepoRoot(): string {
   return path.resolve(/*turbopackIgnore: true*/ process.cwd(), "..");
 }
@@ -18,8 +20,29 @@ function getSeedReportPath(): string {
   return path.join(process.cwd(), "src", "data", "seed-report.json");
 }
 
+function getMarketDataBaseUrl(): string {
+  return (process.env.MARKET_DATA_BASE_URL || DEFAULT_MARKET_DATA_BASE_URL).replace(/\/+$/, "");
+}
+
 function readJsonFile<T>(filePath: string): T {
   return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
+}
+
+async function fetchRemoteJson<T>(relativePath: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${getMarketDataBaseUrl()}/${relativePath}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<T>;
+  } catch (error) {
+    console.warn(`Remote market data unavailable for ${relativePath}:`, error);
+    return null;
+  }
 }
 
 function loadSeedReport(): ReportData | null {
@@ -57,7 +80,12 @@ function emptyReport(): ReportData {
   };
 }
 
-export function loadLatestReport(): ReportData {
+export async function loadLatestReport(): Promise<ReportData> {
+  const remoteReport = await fetchRemoteJson<ReportData>("latest_report.json");
+  if (remoteReport) {
+    return remoteReport;
+  }
+
   const webReportPath = path.join(getWebOutputDir(), "latest_report.json");
   if (fs.existsSync(webReportPath)) {
     return readJsonFile<ReportData>(webReportPath);
@@ -102,8 +130,13 @@ export function loadLatestReport(): ReportData {
   };
 }
 
-export function loadStockDetail(symbol: string): StockDetailData {
+export async function loadStockDetail(symbol: string): Promise<StockDetailData> {
   const normalized = symbol.toUpperCase().replace(".IS", "");
+  const remoteDetail = await fetchRemoteJson<StockDetailData>(`stocks/${normalized}.json`);
+  if (remoteDetail) {
+    return remoteDetail;
+  }
+
   const filePath = path.join(getWebOutputDir(), "stocks", `${normalized}.json`);
 
   if (fs.existsSync(filePath)) {
@@ -126,7 +159,7 @@ export function loadStockDetail(symbol: string): StockDetailData {
   throw new Error(`Stock detail not found for ${normalized}`);
 }
 
-export function loadAnalysisStatus(): AnalysisStatus {
+function loadLocalAnalysisStatus(): AnalysisStatus {
   const filePath = path.join(getWebOutputDir(), "analysis_status.json");
 
   if (!fs.existsSync(filePath)) {
@@ -146,6 +179,17 @@ export function loadAnalysisStatus(): AnalysisStatus {
   }
 
   return readJsonFile<AnalysisStatus>(filePath);
+}
+
+export async function loadAnalysisStatus({ preferRemote = true } = {}): Promise<AnalysisStatus> {
+  if (preferRemote) {
+    const remoteStatus = await fetchRemoteJson<AnalysisStatus>("analysis_status.json");
+    if (remoteStatus) {
+      return remoteStatus;
+    }
+  }
+
+  return loadLocalAnalysisStatus();
 }
 
 export function getRepoPaths() {
