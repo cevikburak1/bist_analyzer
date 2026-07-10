@@ -31,6 +31,7 @@ from analysis.horizon_guidance import (
 )
 from analysis.horizon_scoring import (
     HorizonScoreSet,
+    calculate_horizon_score_set,
 )
 from config import (
     BUY_THRESHOLD,
@@ -44,6 +45,8 @@ from config import (
 
 ATR_STOP_MULTIPLIER = 2.0
 ATR_TARGET_MULTIPLIER = 3.0
+MIN_SIGNAL_BARS = 200
+MIN_STRONG_CONFIRMATION_SAMPLES = 10
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +95,7 @@ class Signal:
 
 
 def _trend_label(indicators: dict) -> str:
-    slope = indicators.get("trend_slope", 0)
+    slope = _safe(indicators.get("trend_slope"))
     if slope > 0.05:
         return "YUKARI"
     elif slope < -0.05:
@@ -101,8 +104,8 @@ def _trend_label(indicators: dict) -> str:
 
 
 def _volume_label(indicators: dict) -> str:
-    vol_short = indicators.get("volume_short_avg", 0) or 0
-    vol_avg = indicators.get("volume_avg", 0) or 0
+    vol_short = _safe(indicators.get("volume_short_avg"))
+    vol_avg = _safe(indicators.get("volume_avg"))
     if vol_avg <= 0:
         return "?"
     ratio = vol_short / vol_avg
@@ -114,9 +117,65 @@ def _volume_label(indicators: dict) -> str:
 
 
 def _safe(val, default=0.0) -> float:
-    if val is None or (isinstance(val, float) and np.isnan(val)):
+    if val is None:
         return default
-    return float(val)
+    try:
+        result = float(val)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return result if np.isfinite(result) else default
+
+
+def _signal_data_quality(indicators: dict, df=None) -> tuple[bool, list[str]]:
+    """Aktif AL/SAT karari icin uzun-trend ve veri yeterliligini denetler."""
+    issues: list[str] = []
+
+    if df is not None:
+        try:
+            close_values = np.asarray(df["close"], dtype=float)
+            valid_bars = int(np.count_nonzero(np.isfinite(close_values) & (close_values > 0)))
+        except (KeyError, TypeError, ValueError):
+            valid_bars = 0
+        if valid_bars < MIN_SIGNAL_BARS:
+            issues.append(f"yeterli bar yok ({valid_bars}/{MIN_SIGNAL_BARS})")
+
+    close = _safe(indicators.get("close"), default=np.nan)
+    rsi = _safe(indicators.get("rsi"), default=np.nan)
+    ema200 = _safe(indicators.get("ema200"), default=np.nan)
+    sma_long = _safe(indicators.get("sma_long"), default=np.nan)
+    macd = _safe(indicators.get("macd"), default=np.nan)
+    macd_signal = _safe(indicators.get("macd_signal"), default=np.nan)
+    volume_avg = _safe(indicators.get("volume_avg"), default=np.nan)
+
+    if not np.isfinite(close) or close <= 0:
+        issues.append("gecerli kapanis yok")
+    if not np.isfinite(rsi) or not 0 <= rsi <= 100:
+        issues.append("RSI hazir degil")
+    if not np.isfinite(ema200) or ema200 <= 0:
+        issues.append("EMA200 hazir degil")
+    if not np.isfinite(sma_long) or sma_long <= 0:
+        issues.append("SMA200 hazir degil")
+    if not np.isfinite(macd) or not np.isfinite(macd_signal):
+        issues.append("MACD hazir degil")
+    if not np.isfinite(volume_avg) or volume_avg <= 0:
+        issues.append("hacim ortalamasi hazir degil")
+
+    positive_indicators = ("sma_short", "ema20", "ema50")
+    missing_positive = [
+        name for name in positive_indicators
+        if _safe(indicators.get(name), default=np.nan) <= 0
+        or not np.isfinite(_safe(indicators.get(name), default=np.nan))
+    ]
+    finite_indicators = ("adx", "plus_di", "minus_di", "v_kat")
+    missing_finite = [
+        name for name in finite_indicators
+        if not np.isfinite(_safe(indicators.get(name), default=np.nan))
+    ]
+    if missing_positive or missing_finite:
+        missing = missing_positive + missing_finite
+        issues.append("temel gostergeler hazir degil: " + ", ".join(missing))
+
+    return not issues, issues
 
 
 def _target_direction(indicators: dict, signal: str) -> str:
@@ -124,15 +183,7 @@ def _target_direction(indicators: dict, signal: str) -> str:
         return "SHORT"
     if signal == "AL":
         return "LONG"
-
-    close = _safe(indicators.get("close"))
-    ema200 = _safe(indicators.get("ema200"))
-    slope = _safe(indicators.get("trend_slope"))
-    plus_di = _safe(indicators.get("plus_di"))
-    minus_di = _safe(indicators.get("minus_di"))
-    if (ema200 > 0 and close >= ema200) or slope >= 0 or plus_di >= minus_di:
-        return "LONG"
-    return "SHORT"
+    return "NONE"
 
 
 def _effective_atr(close: float, atr: float, swing_low: float, swing_high: float) -> float:
@@ -146,7 +197,7 @@ def _effective_atr(close: float, atr: float, swing_low: float, swing_high: float
 
 
 def calculate_stop_and_target(indicators: dict, signal: str) -> dict:
-    """ATR tabanlı stop-loss ve hedef; tüm aksiyonlarda gösterge seviye üretir."""
+    """ATR tabanli stop-loss ve hedef; yalnizca yonlu aksiyonlarda seviye uretir."""
     close = _safe(indicators.get("close"))
     swing_low = _safe(indicators.get("swing_low_20"))
     swing_high = _safe(indicators.get("swing_high_20"))
@@ -157,15 +208,16 @@ def calculate_stop_and_target(indicators: dict, signal: str) -> dict:
               "risk_pct": 0.0, "reward_pct": 0.0, "rr_ratio": 0.0,
               "direction": direction, "atr": atr}
 
-    if close <= 0 or atr <= 0:
+    if close <= 0 or atr <= 0 or direction == "NONE":
         return result
 
     if direction == "LONG":
         atr_stop = close - ATR_STOP_MULTIPLIER * atr
         stop = max(atr_stop, swing_low * 0.99) if swing_low > 0 else atr_stop
         stop = min(stop, close * 0.98)
+        stop = max(close * 0.01, stop)
         target = close + ATR_TARGET_MULTIPLIER * atr
-        risk, reward = close - stop, target - close
+        risk, reward = max(close - stop, 0.0), max(target - close, 0.0)
         result.update({
             "stop_loss": round(stop, 2), "target": round(target, 2),
             "risk_pct": round((risk / close) * 100, 2) if close > 0 else 0.0,
@@ -176,10 +228,10 @@ def calculate_stop_and_target(indicators: dict, signal: str) -> dict:
         atr_stop = close + ATR_STOP_MULTIPLIER * atr
         stop = min(atr_stop, swing_high * 1.01) if swing_high > 0 else atr_stop
         stop = max(stop, close * 1.02)
-        target = close - ATR_TARGET_MULTIPLIER * atr
-        risk, reward = stop - close, close - target
+        target = max(0.01, close - ATR_TARGET_MULTIPLIER * atr)
+        risk, reward = max(stop - close, 0.0), max(close - target, 0.0)
         result.update({
-            "stop_loss": round(stop, 2), "target": round(max(0.01, target), 2),
+            "stop_loss": round(stop, 2), "target": round(target, 2),
             "risk_pct": round((risk / close) * 100, 2) if close > 0 else 0.0,
             "reward_pct": round((reward / close) * 100, 2) if close > 0 else 0.0,
             "rr_ratio": round(reward / risk, 2) if risk > 0 else 0.0,
@@ -199,7 +251,8 @@ def generate_signal(
     Hisse için tam sinyal üretir: temel sinyal + fibonacci + mum formasyonları +
     Elliott Wave + 3 vadeli hedef + Türkçe yorum.
     """
-    score = score_breakdown.total
+    raw_score = _safe(score_breakdown.total, default=np.nan)
+    score = raw_score if np.isfinite(raw_score) else 0.0
     close = _safe(indicators.get("close"))
     rsi = _safe(indicators.get("rsi"))
     sma_short = _safe(indicators.get("sma_short"))
@@ -209,6 +262,10 @@ def generate_signal(
     macd_signal_val = _safe(indicators.get("macd_signal"))
     vol_short = _safe(indicators.get("volume_short_avg"))
     vol_avg = _safe(indicators.get("volume_avg"))
+    data_ready, data_issues = _signal_data_quality(indicators, df)
+    if not np.isfinite(raw_score):
+        data_ready = False
+        data_issues.append("skor hesaplanamadi")
 
     trend = _trend_label(indicators)
     vol_status = _volume_label(indicators)
@@ -224,14 +281,20 @@ def generate_signal(
     overextended = bool(score_breakdown.overextended)
     strong_confirmation = (
         score >= STRONG_BUY_THRESHOLD
-        and score_breakdown.wr_pct >= 70
-        and score_breakdown.adx >= 25
-        and score_breakdown.v_kat >= 1.0
+        and _safe(score_breakdown.wr_pct) >= 70
+        and _safe(score_breakdown.wr_samples) >= MIN_STRONG_CONFIRMATION_SAMPLES
+        and _safe(score_breakdown.adx) >= 25
+        and _safe(score_breakdown.v_kat) >= 1.0
     )
     action = "BEKLE"
 
     # ── SAT kontrolleri ──
-    if score <= SELL_THRESHOLD:
+    if not data_ready:
+        signal = "BEKLE"
+        action = "BEKLE"
+        reason = "Teknik veri yetersiz; aktif AL/SAT sinyali uretilmedi: " + ", ".join(data_issues)
+        reason_factors.extend(data_issues)
+    elif score <= SELL_THRESHOLD:
         signal = "SAT"
         action = "SAT"
         reason = f"Düşük Morpheus skor ({score:.0f} ≤ {SELL_THRESHOLD}) - SAT eşiği aşıldı"
@@ -279,7 +342,9 @@ def generate_signal(
             "Hacim AL eşiğini karşılıyor",
         ])
         if strong_confirmation:
-            reason_factors.append("WR%, ADX ve V_KAT güçlü teyit veriyor")
+            reason_factors.append(
+                f"Tarihsel kurulum proxy'si ({score_breakdown.wr_samples} örnek), ADX ve V_KAT teyitli"
+            )
         if should_filter_buy_signals(market_regime):
             signal = "BEKLE"
             action = "BEKLE"
@@ -311,7 +376,8 @@ def generate_signal(
             reason_factors.append(f"Skor {score:.0f} aralığı [{SELL_THRESHOLD+1},{BUY_THRESHOLD-1}]")
 
     # ── Stop / Hedef ──
-    risk_data = calculate_stop_and_target(indicators, signal)
+    risk_signal = "AL" if action == "KAR AL" else signal
+    risk_data = calculate_stop_and_target(indicators, risk_signal)
 
     # ── Çoklu zaman dilimi ──
     tf_signals: Optional[TimeframeSignals] = None
@@ -381,7 +447,7 @@ def generate_signal(
     tgt = TargetLevels(stop_loss=risk_data["stop_loss"])
     try:
         target_signal = signal if signal in {"AL", "SAT"} else (
-            "AL" if risk_data.get("direction") == "LONG" else "SAT"
+            "AL" if action == "KAR AL" else "BEKLE"
         )
         tgt = calculate_targets(close, _safe(risk_data.get("atr")),
                                 risk_data["stop_loss"], fib, target_signal)
@@ -397,8 +463,15 @@ def generate_signal(
     except Exception as e:
         logger.warning("Vade önerisi hatası [%s]: %s", symbol, str(e))
 
-    # Eski vade bazlı skor motoru 0-100 kategorilere dayanıyordu; ana çıktı yalnızca Morpheus skoru taşır.
     horizon_scores: Optional[HorizonScoreSet] = None
+    if df is not None:
+        try:
+            beta = _safe(indicators.get("beta"), default=1.0)
+            horizon_scores = calculate_horizon_score_set(
+                df, market_regime, beta=beta,
+            )
+        except Exception as e:
+            logger.warning("Vade skor motoru hatasi [%s]: %s", symbol, str(e))
 
     # ── Yorum ──
     comm = Commentary()

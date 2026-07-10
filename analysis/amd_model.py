@@ -207,6 +207,8 @@ def _params(interval: str) -> dict[str, Any]:
         "displacement_multiplier": DISPLACEMENT_MULTIPLIER,
         "projection_multiples": list(PROJECTION_MULTIPLES),
         "interval": interval,
+        "session_aware": True,
+        "timezone": "Europe/Istanbul",
     }
 
 
@@ -340,22 +342,27 @@ def _equal_liquidity(df: pd.DataFrame, kind: str) -> list[dict[str, Any]]:
 
 
 def _key_opens(df: pd.DataFrame) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
+    result: dict[tuple[str, str], dict[str, Any]] = {}
     wanted = {"10:00": "BIST Açılış", "13:00": "Gün Ortası", "16:00": "Kapanışa Yakın"}
-    seen: set[str] = set()
     for pos, timestamp in enumerate(pd.to_datetime(df.index)):
         key = timestamp.strftime("%H:%M")
-        if key not in wanted or key in seen:
+        if key not in wanted:
             continue
-        seen.add(key)
-        result.append(
-            {
-                "label": wanted[key],
-                "time": timestamp.isoformat(),
-                "price": round(_safe_float(df["open"].iloc[pos]), 4),
-            }
-        )
-    return result[-6:]
+        session_key = (timestamp.date().isoformat(), key)
+        result[session_key] = {
+            "label": wanted[key],
+            "time": timestamp.isoformat(),
+            "price": round(_safe_float(df["open"].iloc[pos]), 4),
+        }
+    return list(result.values())[-6:]
+
+
+def _istanbul_index(index: pd.Index) -> pd.DatetimeIndex:
+    """AMD saat kurallarını her çalışma ortamında BIST yerel saatine sabitle."""
+    localized = pd.DatetimeIndex(pd.to_datetime(index))
+    if localized.tz is None:
+        return localized.tz_localize("Europe/Istanbul")
+    return localized.tz_convert("Europe/Istanbul")
 
 
 def _displacement(df: pd.DataFrame, pos: int | None) -> bool:
@@ -375,12 +382,31 @@ def calculate_amd_model(intraday_df: pd.DataFrame | None, interval: str = "60m")
     if not required.issubset(intraday_df.columns):
         return _empty("AMD modeli için OHLCV kolonları eksik.", interval)
 
-    df = intraday_df.dropna(subset=["open", "high", "low", "close"]).tail(CONTEXT_BARS).copy()
+    df = (
+        intraday_df.dropna(subset=["open", "high", "low", "close"])
+        .sort_index()
+        .tail(CONTEXT_BARS)
+        .copy()
+    )
+    df.index = _istanbul_index(df.index)
     if len(df) < MIN_INTRADAY_BARS:
         return _empty("AMD modeli için yeterli intraday bar yok.", interval)
 
-    accumulation_end = max(8, int(len(df) * ACCUMULATION_FRACTION)) - 1
-    accumulation = _range(df, 0, accumulation_end)
+    # Accumulation/manipulation aynı işlem seansına ait olmalıdır. Eski kod
+    # 90 barlık pencerenin ilk %34'ünü (birkaç farklı günü) tek range yapıyordu.
+    session_dates = np.asarray(df.index.date)
+    latest_session = session_dates[-1]
+    session_positions = np.flatnonzero(session_dates == latest_session)
+    if len(session_positions) < 3:
+        return _empty("Güncel BIST seansında AMD için yeterli bar yok.", interval)
+    session_start = int(session_positions[0])
+    session_size = len(session_positions)
+    accumulation_bars = min(
+        max(2, int(np.ceil(session_size * ACCUMULATION_FRACTION))),
+        session_size - 1,
+    )
+    accumulation_end = session_start + accumulation_bars - 1
+    accumulation = _range(df, session_start, accumulation_end)
     sweep = _detect_sweep(df, accumulation, accumulation_end + 1)
     htf_sweep = _daily_sweep(df)
     equal_highs = _equal_liquidity(df, "high")

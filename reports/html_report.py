@@ -110,7 +110,7 @@ def _build_data_table(signals: list[Signal]) -> str:
                 <th style="padding:10px; text-align:center; cursor:pointer;" onclick="sortTable(2)">Skor ⇅</th>
                 <th style="padding:10px; text-align:center;">Aksiyon</th>
                 <th style="padding:10px; text-align:left;">Neden</th>
-                <th style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(5)">WR% ⇅</th>
+                <th title="3 bar sonraki maliyet tamponlu tarihsel kurulum başarı proxy'si; gerçek backtest değildir" style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(5)">Kurulum% ⇅</th>
                 <th style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(6)">ADX ⇅</th>
                 <th style="padding:10px; text-align:right; cursor:pointer;" onclick="sortTable(7)">V/K ⇅</th>
                 <th style="padding:10px; text-align:center;">DZL</th>

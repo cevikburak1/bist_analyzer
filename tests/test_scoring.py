@@ -121,6 +121,8 @@ def test_stop_and_targets_exist_for_hold_actions():
     assert signal.target > 0
     assert signal.targets is not None
     assert signal.targets.short_target > 0
+    assert signal.horizon_scores is not None
+    assert signal.horizon_scores.short.horizon == "short"
 
 
 def test_stop_and_targets_use_fallback_when_atr_missing():
@@ -130,10 +132,11 @@ def test_stop_and_targets_use_fallback_when_atr_missing():
     indicators["atr"] = 0.0
     indicators["swing_low_20"] = 0.0
     indicators["swing_high_20"] = 0.0
-    indicators["rsi"] = 80.0
+    indicators["rsi"] = 65.0
     score = calculate_score(indicators, regime(), df)
     signal = generate_signal("TEST", indicators, score, regime(), df=df)
 
+    assert signal.signal == "AL"
     assert signal.stop_loss > 0
     assert signal.target > 0
     assert signal.targets.short_target > 0

@@ -10,9 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -21,6 +22,7 @@ from analysis.signals import Signal
 from config import (
     ANALYSIS_LOCK_PATH,
     ANALYSIS_STATUS_PATH,
+    INTRADAY_INTERVAL,
     INTRADAY_REFRESH_MINUTES,
     LATEST_REPORT_PATH,
     WEB_INTRADAY_SERIES_LENGTH,
@@ -29,6 +31,212 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
+
+MARKET_TIMEZONE = ZoneInfo("Europe/Istanbul")
+MARKET_OPEN_TIME = dt_time(10, 0)
+MARKET_CLOSE_TIME = dt_time(18, 10)
+BAR_COMPLETION_GRACE = timedelta(minutes=5)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _as_istanbul(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=MARKET_TIMEZONE)
+    return value.astimezone(MARKET_TIMEZONE)
+
+
+def _interval_delta(interval: str = INTRADAY_INTERVAL) -> timedelta:
+    value = interval.strip().lower()
+    units = {"wk": "weeks", "m": "minutes", "h": "hours", "d": "days"}
+    for suffix in ("wk", "m", "h", "d"):
+        if value.endswith(suffix):
+            amount = int(value[: -len(suffix)])
+            if amount > 0:
+                return timedelta(**{units[suffix]: amount})
+    raise ValueError(f"Desteklenmeyen bar aralığı: {interval}")
+
+
+def _market_is_open(now: datetime) -> bool:
+    local_now = _as_istanbul(now)
+    return (
+        local_now.weekday() < 5
+        and MARKET_OPEN_TIME <= local_now.time() < MARKET_CLOSE_TIME
+    )
+
+
+def _local_timestamp(value: Any) -> pd.Timestamp:
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        return timestamp.tz_localize(MARKET_TIMEZONE)
+    return timestamp.tz_convert(MARKET_TIMEZONE)
+
+
+def _bar_data_as_of(
+    df: pd.DataFrame | None,
+    *,
+    intraday: bool,
+) -> datetime | None:
+    if df is None or df.empty:
+        return None
+    latest = _local_timestamp(df.index[-1]).to_pydatetime()
+    session_close = datetime.combine(
+        latest.date(), MARKET_CLOSE_TIME, tzinfo=MARKET_TIMEZONE
+    )
+    if not intraday:
+        return session_close
+    return min(latest + _interval_delta(), session_close)
+
+
+def _source_freshness(
+    df: pd.DataFrame | None,
+    *,
+    intraday: bool,
+    now: datetime,
+) -> dict[str, Any]:
+    data_as_of = _bar_data_as_of(df, intraday=intraday)
+    if data_as_of is None:
+        return {
+            "status": "missing",
+            "data_as_of": None,
+            "age_minutes": None,
+            "last_bar_complete": None,
+            "dropped_incomplete_bars": 0,
+        }
+
+    local_now = _as_istanbul(now)
+    completion_time = data_as_of + BAR_COMPLETION_GRACE
+    last_bar_complete = completion_time <= local_now
+    age_minutes = round(
+        max(0.0, (local_now - data_as_of).total_seconds() / 60.0), 1
+    )
+    if not last_bar_complete:
+        status = "incomplete"
+    else:
+        max_age = (
+            (_interval_delta().total_seconds() / 60)
+            + INTRADAY_REFRESH_MINUTES
+            + 10
+            if intraday and _market_is_open(now)
+            else 4 * 24 * 60
+        )
+        status = "fresh" if age_minutes <= max_age else "stale"
+
+    attrs = getattr(df, "attrs", {}) if df is not None else {}
+    return {
+        "status": status,
+        "data_as_of": data_as_of.astimezone(timezone.utc).isoformat(),
+        "age_minutes": age_minutes,
+        "last_bar_complete": last_bar_complete,
+        "dropped_incomplete_bars": int(attrs.get("dropped_incomplete_bars", 0)),
+    }
+
+
+def _summarize_source_freshness(
+    data: dict[str, pd.DataFrame],
+    expected_symbols: set[str],
+    *,
+    intraday: bool,
+    now: datetime,
+) -> dict[str, Any]:
+    details = {
+        symbol: _source_freshness(df, intraday=intraday, now=now)
+        for symbol, df in data.items()
+        if not expected_symbols or symbol in expected_symbols
+    }
+    missing_symbols = sorted(expected_symbols - set(details))
+    stale_symbols = sorted(
+        symbol
+        for symbol, item in details.items()
+        if item["status"] in {"stale", "incomplete"}
+    )
+    as_of_values = [
+        item["data_as_of"] for item in details.values() if item["data_as_of"]
+    ]
+    ages = [
+        item["age_minutes"]
+        for item in details.values()
+        if item["age_minutes"] is not None
+    ]
+
+    if not details:
+        status = "missing"
+    elif stale_symbols or missing_symbols:
+        status = "partial" if len(stale_symbols) + len(missing_symbols) < len(expected_symbols) else "stale"
+    else:
+        status = "fresh"
+
+    return {
+        "status": status,
+        "latest_data_as_of": max(as_of_values) if as_of_values else None,
+        "oldest_data_as_of": min(as_of_values) if as_of_values else None,
+        "max_age_minutes": max(ages) if ages else None,
+        "available_symbols": len(details),
+        "expected_symbols": len(expected_symbols),
+        "stale_symbols": stale_symbols,
+        "missing_symbols": missing_symbols,
+    }
+
+
+def _build_freshness_payload(
+    stock_data: dict[str, pd.DataFrame],
+    stock_intraday: dict[str, pd.DataFrame],
+    expected_symbols: set[str],
+    *,
+    now: datetime,
+) -> dict[str, Any]:
+    daily = _summarize_source_freshness(
+        stock_data, expected_symbols, intraday=False, now=now
+    )
+    intraday = _summarize_source_freshness(
+        stock_intraday, expected_symbols, intraday=True, now=now
+    )
+    statuses = {daily["status"], intraday["status"]}
+    if statuses == {"fresh"}:
+        status = "fresh"
+    elif statuses == {"missing"}:
+        status = "missing"
+    else:
+        status = "degraded"
+    return {
+        "status": status,
+        "timezone": str(MARKET_TIMEZONE),
+        "checked_at": now.astimezone(timezone.utc).isoformat(),
+        "daily": daily,
+        "intraday": intraday,
+    }
+
+
+def _stock_freshness_payload(
+    daily_df: pd.DataFrame | None,
+    intraday_df: pd.DataFrame | None,
+    *,
+    now: datetime,
+) -> dict[str, Any]:
+    daily = _source_freshness(daily_df, intraday=False, now=now)
+    intraday = _source_freshness(intraday_df, intraday=True, now=now)
+    statuses = {daily["status"], intraday["status"]}
+    if statuses == {"fresh"}:
+        status = "fresh"
+    elif daily["status"] == "missing":
+        status = "missing"
+    else:
+        status = "degraded"
+    return {
+        "status": status,
+        "timezone": str(MARKET_TIMEZONE),
+        "daily": daily,
+        "intraday": intraday,
+    }
+
+
+def _latest_data_as_of(*values: str | None) -> str | None:
+    timestamps = [pd.Timestamp(value) for value in values if value]
+    if not timestamps:
+        return None
+    return max(timestamps).isoformat()
 
 
 def _safe_json_value(value: Any) -> Any:
@@ -81,7 +289,7 @@ def acquire_analysis_lock(run_id: str, requested_symbols: int) -> bool:
         "run_id": run_id,
         "pid": os.getpid(),
         "requested_symbols": requested_symbols,
-        "started_at": datetime.now().isoformat(),
+        "started_at": _utc_now().isoformat(),
     }
     _atomic_write_json(ANALYSIS_LOCK_PATH, lock_data)
     return True
@@ -122,7 +330,7 @@ def write_analysis_status(
         "finished_at": finished_at,
         "last_success_at": last_success_at,
         "error": error,
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": _utc_now().isoformat(),
     }
     _atomic_write_json(ANALYSIS_STATUS_PATH, payload)
 
@@ -317,10 +525,24 @@ def save_web_snapshot(
     *,
     requested_symbols: int,
 ) -> Path:
-    generated_at = datetime.now().isoformat()
+    now = _utc_now()
+    generated_at = now.isoformat()
+    expected_symbols = {sig.symbol for sig in signals}
+    freshness = _build_freshness_payload(
+        stock_data,
+        stock_intraday,
+        expected_symbols,
+        now=now,
+    )
+    data_as_of = _latest_data_as_of(
+        freshness["daily"]["latest_data_as_of"],
+        freshness["intraday"]["latest_data_as_of"],
+    )
 
     latest_report = {
         "generated_at": generated_at,
+        "data_as_of": data_as_of,
+        "freshness": freshness,
         "market_regime": _build_market_regime_payload(regime),
         "summary": {
             "total": len(signals),
@@ -338,13 +560,26 @@ def save_web_snapshot(
     _atomic_write_json(LATEST_REPORT_PATH, _normalize_json(latest_report))
 
     for sig in signals:
+        daily_df = stock_data.get(sig.symbol)
+        intraday_df = stock_intraday.get(sig.symbol)
+        stock_freshness = _stock_freshness_payload(
+            daily_df,
+            intraday_df,
+            now=now,
+        )
+        stock_data_as_of = _latest_data_as_of(
+            stock_freshness["daily"]["data_as_of"],
+            stock_freshness["intraday"]["data_as_of"],
+        )
         stock_payload = {
             "generated_at": generated_at,
+            "data_as_of": stock_data_as_of,
+            "freshness": stock_freshness,
             "market_regime": latest_report["market_regime"],
             "meta": latest_report["meta"],
             "signal": _build_signal_payload(sig),
-            "series": _build_series_payload(stock_data.get(sig.symbol)),
-            "intraday_series": _build_intraday_series_payload(stock_intraday.get(sig.symbol)),
+            "series": _build_series_payload(daily_df),
+            "intraday_series": _build_intraday_series_payload(intraday_df),
         }
         _atomic_write_json(WEB_STOCKS_DIR / f"{sig.symbol}.json", _normalize_json(stock_payload))
 

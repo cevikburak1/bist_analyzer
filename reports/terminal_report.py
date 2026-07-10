@@ -82,7 +82,7 @@ def print_signals_table(signals: list[Signal]) -> None:
     table.add_column("SKOR", justify="right", width=6)
     table.add_column("AKSİYON", justify="center", width=9)
     table.add_column("NEDEN", width=22)
-    table.add_column("WR%", justify="right", width=6)
+    table.add_column("KUR%", justify="right", width=6)
     table.add_column("ADX", justify="right", width=5)
     table.add_column("V/K", justify="right", width=5)
     table.add_column("DZL", justify="center", width=4)

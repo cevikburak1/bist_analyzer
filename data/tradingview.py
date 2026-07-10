@@ -30,7 +30,7 @@ class TradingViewSnapshot:
     volume: float | None = None
     change_pct: float | None = None
     source: str = "tradingview_scanner"
-    status: str = "ok"
+    status: str = "unverified"
     price_delta_pct: float | None = None
     volume_delta_pct: float | None = None
 
@@ -128,7 +128,11 @@ def fetch_tradingview_snapshots(
             indicators = latest_indicators[ticker]
             snapshot.price_delta_pct = _delta_pct(_to_float(indicators.get("close")), snapshot.close)
             snapshot.volume_delta_pct = _delta_pct(_to_float(indicators.get("volume")), snapshot.volume)
-            price_ok = snapshot.price_delta_pct is None or abs(snapshot.price_delta_pct) <= 3
+            if snapshot.price_delta_pct is None:
+                snapshot.status = "unverified"
+                snapshots[ticker] = snapshot
+                continue
+            price_ok = abs(snapshot.price_delta_pct) <= 3
             volume_ok = snapshot.volume_delta_pct is None or abs(snapshot.volume_delta_pct) <= 35
             snapshot.status = "verified" if price_ok and volume_ok else "diverged"
         snapshots[ticker] = snapshot

@@ -7,6 +7,7 @@ Uzun Vade (3+ ay):      ATR*5 + Fib 1.618 + trend projection
 """
 
 import logging
+import math
 from dataclasses import dataclass
 
 from analysis.fibonacci import FibonacciResult
@@ -34,7 +35,15 @@ class TargetLevels:
 
 
 def _round_price(val: float) -> float:
-    return round(val, 2)
+    return round(val, 2) if math.isfinite(val) else 0.0
+
+
+def _finite_float(value, default: float = 0.0) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return result if math.isfinite(result) else default
 
 
 def calculate_targets(
@@ -51,14 +60,23 @@ def calculate_targets(
     SAT sinyali → aşağı yönlü hedefler
     BEKLE → sıfır
     """
+    close = _finite_float(close)
+    atr = _finite_float(atr)
+    stop_loss = _finite_float(stop_loss)
+    fib = fib if isinstance(fib, FibonacciResult) else FibonacciResult()
+
     if close <= 0 or atr <= 0 or signal == "BEKLE":
         return TargetLevels(stop_loss=stop_loss)
 
-    risk = abs(close - stop_loss) if stop_loss > 0 else atr * 2
-
     if signal == "AL":
+        if not 0 < stop_loss < close:
+            stop_loss = max(close * 0.01, close - atr * 2)
+        risk = close - stop_loss
         return _buy_targets(close, atr, stop_loss, risk, fib)
     elif signal == "SAT":
+        if stop_loss <= close:
+            stop_loss = close + atr * 2
+        risk = stop_loss - close
         return _sell_targets(close, atr, stop_loss, risk, fib)
 
     return TargetLevels(stop_loss=stop_loss)
@@ -68,8 +86,12 @@ def _buy_targets(
     close: float, atr: float, stop: float, risk: float, fib: FibonacciResult,
 ) -> TargetLevels:
     """AL sinyali için yukarı yönlü 3 hedef."""
-    fib_resistance = fib.nearest_resistance if fib.nearest_resistance > close else 0
-    ext_levels = sorted(fib.extension_levels.values()) if fib.extension_levels else []
+    nearest_resistance = _finite_float(fib.nearest_resistance)
+    fib_resistance = nearest_resistance if nearest_resistance > close else 0
+    ext_levels = sorted(
+        value for raw in fib.extension_levels.values()
+        if (value := _finite_float(raw)) > 0
+    ) if fib.extension_levels else []
     ext_above = [v for v in ext_levels if v > close]
 
     # ── Kısa Vade: min(1.5*ATR, en yakın direnç) ──
@@ -86,8 +108,9 @@ def _buy_targets(
     candidates = [atr_medium]
     if ext_above:
         candidates.append(ext_above[0])
-    if fib.swing_high > close:
-        candidates.append(fib.swing_high)
+    swing_high = _finite_float(fib.swing_high)
+    if swing_high > close:
+        candidates.append(swing_high)
     medium_t = _round_price(min(candidates))
     if medium_t <= short_t:
         medium_t = _round_price(atr_medium)
@@ -95,7 +118,7 @@ def _buy_targets(
     # ── Uzun Vade: max(5*ATR, Fib 1.618) ──
     atr_long = close + 5.0 * atr
     candidates = [atr_long]
-    fib_1618 = fib.extension_levels.get(1.618, 0)
+    fib_1618 = _finite_float(fib.extension_levels.get(1.618, 0))
     if fib_1618 > close:
         candidates.append(fib_1618)
     long_t = _round_price(max(candidates))
@@ -123,7 +146,8 @@ def _sell_targets(
     close: float, atr: float, stop: float, risk: float, fib: FibonacciResult,
 ) -> TargetLevels:
     """SAT sinyali için aşağı yönlü 3 hedef."""
-    fib_support = fib.nearest_support if 0 < fib.nearest_support < close else 0
+    nearest_support = _finite_float(fib.nearest_support)
+    fib_support = nearest_support if 0 < nearest_support < close else 0
 
     # ── Kısa Vade ──
     atr_short = close - 1.5 * atr

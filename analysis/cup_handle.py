@@ -26,6 +26,7 @@ MIN_SETUP_SCORE = 28.0
 MIN_BREAKOUT_QUALITY = 16.0
 MIN_PATTERN_SCORE = 36.0
 TARGET_PROJECTION_BARS = 64
+MAX_BREAKOUT_AGE_BARS = 3
 
 
 @dataclass
@@ -225,21 +226,69 @@ def _score_candidate(df: pd.DataFrame, candidate: dict[str, Any]) -> dict[str, A
     handle_time_score = 100 * (1 - _clamp(handle_bars / max(cup_bars * 1.65, 1), 0, 1))
     handle_quality = handle_depth_score * 0.66 + handle_time_score * 0.34
 
-    close = _safe(df["close"].iloc[-1])
-    open_ = _safe(df["open"].iloc[-1])
-    high = _safe(df["high"].iloc[-1])
-    low = _safe(df["low"].iloc[-1])
-    volume = _safe(df["volume"].iloc[-1])
-    volume_average = _safe(df["volume"].rolling(VOLUME_BASELINE, min_periods=10).mean().iloc[-1], volume)
-    bar_range = max(high - low, 0.0001)
-    breakout_distance_score = 100 * _clamp((close - rim_price) / max(atr_value, 0.0001), 0, 1)
-    volume_score = 100 * _clamp(((volume / volume_average) - 0.8) / 0.9, 0, 1) if volume_average > 0 else 50
-    body_score = 100 * _clamp(abs(close - open_) / bar_range * 1.25, 0, 1)
-    close_score = 100 * _clamp((close - low) / bar_range, 0, 1)
-    breakout_quality = breakout_distance_score * 0.35 + volume_score * 0.25 + body_score * 0.20 + close_score * 0.20
+    post_handle = df["close"].astype(float).iloc[handle_idx + 1:]
+    above_rim = post_handle > rim_price
+    # A trigger is a crossing, not every bar that remains above the rim.  Use
+    # the latest crossing so a genuine fresh re-breakout is not hidden by an
+    # old historical crossing.
+    breakout_crosses = above_rim & ~above_rim.shift(1, fill_value=False)
+    breakout_hits = np.flatnonzero(breakout_crosses.to_numpy())
+    breakout_idx = (
+        handle_idx + 1 + int(breakout_hits[-1]) if len(breakout_hits) else None
+    )
+    breakout_is_recent = (
+        breakout_idx is not None
+        and (len(df) - 1 - breakout_idx) <= MAX_BREAKOUT_AGE_BARS
+    )
+    max_developing_age = max(20, cup_bars // 2)
+    if breakout_idx is None and (len(df) - 1 - handle_idx) > max_developing_age:
+        return None
+    if breakout_idx is not None and not breakout_is_recent:
+        # Kırılım haftalar önce gerçekleştiyse formasyon artık güncel bir tetik değildir.
+        return None
+
+    current_close = _safe(df["close"].iloc[-1])
+    breakout_quality = 0.0
+    if breakout_idx is not None:
+        breakout_bar = df.iloc[breakout_idx]
+        close = _safe(breakout_bar.get("close"))
+        open_ = _safe(breakout_bar.get("open"))
+        high = _safe(breakout_bar.get("high"))
+        low = _safe(breakout_bar.get("low"))
+        volume = _safe(breakout_bar.get("volume"))
+        volume_average = _safe(
+            df["volume"].shift(1).rolling(
+                VOLUME_BASELINE, min_periods=10,
+            ).mean().iloc[breakout_idx],
+            volume,
+        )
+        breakout_atr = _safe(_atr(df).iloc[breakout_idx], atr_value)
+        bar_range = max(high - low, 0.0001)
+        breakout_distance_score = 100 * _clamp(
+            (close - rim_price) / max(breakout_atr, 0.0001), 0, 1,
+        )
+        volume_score = (
+            100 * _clamp(((volume / volume_average) - 0.8) / 0.9, 0, 1)
+            if volume_average > 0 else 50
+        )
+        # Bearish bir kırılım mumu yalnızca gövdesi büyük diye boğa
+        # kalitesi almamalı.
+        body_score = 100 * _clamp((close - open_) / bar_range * 1.25, 0, 1)
+        close_score = 100 * _clamp((close - low) / bar_range, 0, 1)
+        breakout_quality = (
+            breakout_distance_score * 0.35
+            + volume_score * 0.25
+            + body_score * 0.20
+            + close_score * 0.20
+        )
     setup_score = cup_symmetry * 0.55 + handle_quality * 0.45
     pattern_score = cup_symmetry * 0.33 + handle_quality * 0.27 + breakout_quality * 0.40
-    is_confirmed = close > rim_price and breakout_quality >= MIN_BREAKOUT_QUALITY and pattern_score >= MIN_PATTERN_SCORE
+    is_confirmed = (
+        breakout_is_recent
+        and current_close > rim_price
+        and breakout_quality >= MIN_BREAKOUT_QUALITY
+        and pattern_score >= MIN_PATTERN_SCORE
+    )
     is_detected = setup_score >= MIN_SETUP_SCORE
     if not is_detected:
         return None
@@ -267,8 +316,11 @@ def _score_candidate(df: pd.DataFrame, candidate: dict[str, Any]) -> dict[str, A
             "cup_base": {"index": base_idx, "price": round(base["price"], 4)},
             "right_rim": {"index": right_idx, "price": round(right["price"], 4)},
             "handle_low": {"index": handle_idx, "price": round(handle["price"], 4)},
-            "breakout_index": len(df) - 1,
-            "target_end_index": len(df) - 1 + TARGET_PROJECTION_BARS,
+            "breakout_index": breakout_idx,
+            "target_end_index": (
+                breakout_idx + TARGET_PROJECTION_BARS
+                if breakout_idx is not None else len(df) - 1 + TARGET_PROJECTION_BARS
+            ),
         },
     }
 
@@ -291,7 +343,20 @@ def calculate_cup_handle_quality(df: pd.DataFrame) -> CupHandleQuality:
             scored = _score_candidate(work, candidate)
             if scored is None:
                 continue
-            if best is None or (scored["score"] or 0) > (best["score"] or 0):
+            trigger_idx = scored["points"].get("breakout_index")
+            if trigger_idx is None:
+                trigger_idx = scored["points"]["handle_low"]["index"]
+            best_trigger_idx = -1
+            if best is not None:
+                best_trigger_idx = best["points"].get("breakout_index")
+                if best_trigger_idx is None:
+                    best_trigger_idx = best["points"]["handle_low"]["index"]
+            rank = (bool(scored["is_confirmed"]), int(trigger_idx), float(scored["score"] or 0))
+            best_rank = (
+                (bool(best["is_confirmed"]), int(best_trigger_idx), float(best["score"] or 0))
+                if best is not None else None
+            )
+            if best_rank is None or rank > best_rank:
                 best = scored
 
     if best is None:

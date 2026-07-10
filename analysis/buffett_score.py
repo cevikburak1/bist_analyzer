@@ -20,6 +20,7 @@ Kategoriler:
 from __future__ import annotations
 
 import logging
+import math
 import statistics
 from dataclasses import dataclass, field
 from typing import Optional
@@ -40,15 +41,77 @@ PE_REASONABLE_MAX = 25.0   # F/K bunun üstündeyse pahalı sayılır
 PB_REASONABLE_MAX = 4.0
 P_FCF_REASONABLE_MAX = 15.0
 MOS_TARGET = 0.30          # %30+ güvenlik marjı
+FINANCIAL_SECTORS = {"BANKA", "SIGORTA"}
 
 
 # ── Yardımcılar ──────────────────────────────────────────────────────────────
 
 
 def _ratio(numer: Optional[float], denom: Optional[float]) -> Optional[float]:
-    if numer is None or denom is None or denom == 0:
+    try:
+        numer_value = float(numer) if numer is not None else None
+        denom_value = float(denom) if denom is not None else None
+    except (TypeError, ValueError):
         return None
-    return numer / denom
+    if (
+        numer_value is None
+        or denom_value is None
+        or not math.isfinite(numer_value)
+        or not math.isfinite(denom_value)
+        or denom_value <= 0
+    ):
+        return None
+    result = numer_value / denom_value
+    return result if math.isfinite(result) else None
+
+
+def _number(value: object) -> Optional[float]:
+    try:
+        result = float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+    return result if result is not None and math.isfinite(result) else None
+
+
+def _period_year(value: object) -> Optional[int]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if len(text) >= 4 and text[:4].isdigit():
+        return int(text[:4])
+    return None
+
+
+def _ordered_rows(rows: list[dict]) -> list[dict]:
+    return sorted(
+        rows,
+        key=lambda row: (
+            _period_year(row.get("period")) is not None,
+            _period_year(row.get("period")) or 0,
+        ),
+    )
+
+
+def _aligned_by_period(
+    left: list[dict], right: list[dict], n: int = 5
+) -> list[tuple[dict, dict]]:
+    """Match annual statements by fiscal year, never by list position."""
+    left_by_year = {
+        year: row for row in left
+        if (year := _period_year(row.get("period"))) is not None
+    }
+    right_by_year = {
+        year: row for row in right
+        if (year := _period_year(row.get("period"))) is not None
+    }
+    common = sorted(set(left_by_year) & set(right_by_year))[-n:]
+    if common:
+        return [(left_by_year[year], right_by_year[year]) for year in common]
+
+    # Compatibility for old hand-built bundles without period metadata.
+    if not left_by_year and not right_by_year:
+        return list(zip(_ordered_rows(left)[-n:], _ordered_rows(right)[-n:]))
+    return []
 
 
 def _pct_change_cagr(values: list[float]) -> Optional[float]:
@@ -65,11 +128,33 @@ def _pct_change_cagr(values: list[float]) -> Optional[float]:
 def _last_n(rows: list[dict], key: str, n: int = 5) -> list[float]:
     """Son N yıldan key alanını al, None'ları at."""
     out: list[float] = []
-    for row in rows[-n:]:
+    for row in _ordered_rows(rows)[-n:]:
         v = row.get(key)
-        if v is not None:
-            out.append(float(v))
+        try:
+            value = float(v) if v is not None else None
+        except (TypeError, ValueError):
+            value = None
+        if value is not None and math.isfinite(value):
+            out.append(value)
     return out
+
+
+def _annual_cagr(rows: list[dict], key: str, n: int = 5) -> Optional[float]:
+    """CAGR over the actual fiscal-year span, with ordered fallback."""
+    observations: dict[int, float] = {}
+    for row in _ordered_rows(rows)[-n:]:
+        year = _period_year(row.get("period"))
+        value = _number(row.get(key))
+        if year is not None and value is not None:
+            observations[year] = value
+    if len(observations) >= 2:
+        years = sorted(observations)
+        start, end = observations[years[0]], observations[years[-1]]
+        span = years[-1] - years[0]
+        if start <= 0 or end <= 0 or span <= 0:
+            return None
+        return (end / start) ** (1 / span) - 1
+    return _pct_change_cagr(_last_n(rows, key, n))
 
 
 # ── Kategori puanlayıcılar ──────────────────────────────────────────────────
@@ -95,16 +180,38 @@ def score_moat(bundle: FundamentalsBundle) -> CategoryResult:
     possible = 0.0
 
     # ROE (5y avg + istikrar)
-    income = bundle.income_annual
-    balance = bundle.balance_annual
+    income = _ordered_rows(bundle.income_annual)
+    balance = _ordered_rows(bundle.balance_annual)
 
     roes: list[float] = []
-    for inc, bal in zip(income[-5:], balance[-5:]):
+    average_equity_years = 0
+    balance_by_year = {
+        year: row for row in balance
+        if (year := _period_year(row.get("period"))) is not None
+    }
+    for inc, bal in _aligned_by_period(income, balance, 5):
         ni = inc.get("net_income")
-        eq = bal.get("total_equity")
-        r = _ratio(ni, eq)
+        ending_equity = _number(bal.get("total_equity"))
+        equity_base = ending_equity
+        year = _period_year(inc.get("period"))
+        prior_equity = (
+            _number(balance_by_year.get(year - 1, {}).get("total_equity"))
+            if year is not None else None
+        )
+        if (
+            ending_equity is not None
+            and ending_equity > 0
+            and prior_equity is not None
+            and prior_equity > 0
+        ):
+            equity_base = (prior_equity + ending_equity) / 2
+            average_equity_years += 1
+        r = _ratio(ni, equity_base)
         if r is not None:
             roes.append(r)
+
+    details["roe_equity_basis"] = "average when opening equity is available; otherwise ending"
+    details["roe_average_equity_years"] = average_equity_years
 
     if len(roes) >= 3:
         avg_roe = sum(roes) / len(roes)
@@ -127,7 +234,7 @@ def score_moat(bundle: FundamentalsBundle) -> CategoryResult:
     # Net kâr CAGR
     ni_series = _last_n(income, "net_income", 5)
     if len(ni_series) >= 3:
-        cagr = _pct_change_cagr(ni_series)
+        cagr = _annual_cagr(income, "net_income", 5)
         possible += 10
         if cagr is not None and cagr > 0.10:
             earned += 10
@@ -186,16 +293,33 @@ def score_financial_health(bundle: FundamentalsBundle) -> CategoryResult:
     possible = 0.0
 
     sector_kind = bundle.sector.get("kind", "DIGER")
-    income = bundle.income_annual
-    balance = bundle.balance_annual
-    cashflow = bundle.cashflow_annual
+    income = _ordered_rows(bundle.income_annual)
+    balance = _ordered_rows(bundle.balance_annual)
+    cashflow = _ordered_rows(bundle.cashflow_annual)
+
+    # Borç/özsermaye, cari oran, faiz karşılama ve CFO-CapEx tabanlı FCF;
+    # banka ve sigortaların iş modeli için kurumsal şirketlerle karşılaştırılabilir
+    # değildir. Sektöre özel sermaye yeterliliği/combined ratio verisi gelene
+    # kadar puan üretmek yerine açıkça N/A bırakılır.
+    if sector_kind in FINANCIAL_SECTORS:
+        sector_label = "banka" if sector_kind == "BANKA" else "sigorta"
+        details.update({
+            "debt_to_equity": f"N/A ({sector_label})",
+            "interest_coverage": f"N/A ({sector_label})",
+            "current_ratio": f"N/A ({sector_label})",
+            "positive_fcf_years": None,
+            "fcf_years_evaluated": 0,
+            "reason": "Finansal sektör için kurumsal mali sağlık metrikleri uygun değil",
+        })
+        return CategoryResult(0.0, 0.0, details, is_na=True)
 
     # Borç / Özsermaye
     if sector_kind != "BANKA":
         latest = balance[-1] if balance else {}
         debt = latest.get("total_debt")
         equity = latest.get("total_equity")
-        de = _ratio(debt, equity)
+        debt_value = _number(debt)
+        de = _ratio(debt_value, equity) if debt_value is not None and debt_value >= 0 else None
         if de is not None:
             possible += 10
             if de < DEBT_TO_EQUITY_MAX:
@@ -210,8 +334,8 @@ def score_financial_health(bundle: FundamentalsBundle) -> CategoryResult:
 
     # Faiz karşılama (EBIT / Interest Expense)
     latest_inc = income[-1] if income else {}
-    ebit = latest_inc.get("ebit")
-    interest = latest_inc.get("interest_expense")
+    ebit = _number(latest_inc.get("ebit"))
+    interest = _number(latest_inc.get("interest_expense"))
     if interest is not None and abs(interest) > 0 and ebit is not None:
         coverage = ebit / abs(interest)
         possible += 8
@@ -231,6 +355,9 @@ def score_financial_health(bundle: FundamentalsBundle) -> CategoryResult:
         cr = _ratio(ca, cl)
         if cr is None:
             cr = bundle.info.get("currentRatio")
+        cr = _number(cr)
+        if cr is not None and cr <= 0:
+            cr = None
         if cr is not None:
             possible += 4
             if cr >= CURRENT_RATIO_MIN:
@@ -279,9 +406,10 @@ def score_valuation(
     earned = 0.0
     possible = 0.0
     info = bundle.info
+    sector_kind = bundle.sector.get("kind", "DIGER")
 
     # F/K
-    pe = info.get("trailingPE")
+    pe = _number(info.get("trailingPE"))
     if pe is not None and pe > 0:
         possible += 8
         if pe < 12:
@@ -295,7 +423,7 @@ def score_valuation(
         details["pe"] = None
 
     # PD/DD
-    pb = info.get("priceToBook")
+    pb = _number(info.get("priceToBook"))
     if pb is not None and pb > 0:
         possible += 6
         if pb < 1.5:
@@ -309,41 +437,49 @@ def score_valuation(
         details["pb"] = None
 
     # F / FCF (market cap / free_cashflow)
-    market_cap = info.get("marketCap")
-    fcf_latest = info.get("freeCashflow")
-    if fcf_latest is None:
-        fcf_values = _last_n(bundle.cashflow_annual, "free_cash_flow", 1)
-        fcf_latest = fcf_values[0] if fcf_values else None
-    if market_cap and fcf_latest and fcf_latest > 0:
-        p_fcf = market_cap / fcf_latest
-        possible += 6
-        if p_fcf < 10:
-            earned += 6
-        elif p_fcf < P_FCF_REASONABLE_MAX:
-            earned += 4
-        elif p_fcf < P_FCF_REASONABLE_MAX * 1.5:
-            earned += 2
-        details["p_fcf"] = round(p_fcf, 2)
+    if sector_kind not in FINANCIAL_SECTORS:
+        market_cap = _number(info.get("marketCap"))
+        fcf_latest = _number(info.get("freeCashflow"))
+        if fcf_latest is None:
+            fcf_values = _last_n(bundle.cashflow_annual, "free_cash_flow", 1)
+            fcf_latest = fcf_values[0] if fcf_values else None
+        if market_cap is not None and market_cap > 0 and fcf_latest is not None and fcf_latest > 0:
+            p_fcf = market_cap / fcf_latest
+            possible += 6
+            if p_fcf < 10:
+                earned += 6
+            elif p_fcf < P_FCF_REASONABLE_MAX:
+                earned += 4
+            elif p_fcf < P_FCF_REASONABLE_MAX * 1.5:
+                earned += 2
+            details["p_fcf"] = round(p_fcf, 2)
+        else:
+            details["p_fcf"] = None
     else:
         details["p_fcf"] = None
+        details["p_fcf_reason"] = "N/A (finansal sektör)"
 
     # MoS - intrinsic vs price arasındaki büyüklük farkı 100x üstüyse
     # veri bütünlüğü şüpheli kabul edilir ve MoS skorlamaya katılmaz.
-    if (
-        intrinsic_value_per_share
-        and current_price
-        and intrinsic_value_per_share > 0
-        and current_price > 0
+    if sector_kind in FINANCIAL_SECTORS:
+        details["margin_of_safety"] = None
+        details["intrinsic_value"] = None
+        details["margin_of_safety_reason"] = "N/A (finansal sektör FCF DCF uygun değil)"
+    elif (
+        (intrinsic_numeric := _number(intrinsic_value_per_share)) is not None
+        and (price_numeric := _number(current_price)) is not None
+        and intrinsic_numeric > 0
+        and price_numeric > 0
     ):
-        ratio = intrinsic_value_per_share / current_price
+        ratio = intrinsic_numeric / price_numeric
         if ratio > 100 or ratio < 0.01:
             details["margin_of_safety"] = None
-            details["intrinsic_value"] = round(intrinsic_value_per_share, 4)
+            details["intrinsic_value"] = round(intrinsic_numeric, 4)
             details["margin_of_safety_anomaly"] = (
                 f"Intrinsic/fiyat oranı {ratio:.1f}x - veri bütünlüğü şüpheli, MoS atlandı"
             )
         else:
-            mos = (intrinsic_value_per_share - current_price) / intrinsic_value_per_share
+            mos = (intrinsic_numeric - price_numeric) / intrinsic_numeric
             possible += 5
             if mos >= MOS_TARGET:
                 earned += 5
@@ -352,7 +488,7 @@ def score_valuation(
             elif mos >= 0:
                 earned += 1
             details["margin_of_safety"] = round(mos, 4)
-            details["intrinsic_value"] = round(intrinsic_value_per_share, 4)
+            details["intrinsic_value"] = round(intrinsic_numeric, 4)
     else:
         details["margin_of_safety"] = None
         details["intrinsic_value"] = None
@@ -372,8 +508,12 @@ def score_shareholder_policy(bundle: FundamentalsBundle) -> CategoryResult:
     possible = 0.0
 
     # Temettü
-    div_rows = bundle.dividends_annual[-5:]
-    div_amounts = [r["dividend"] for r in div_rows if r.get("dividend") is not None]
+    div_rows = _ordered_rows(bundle.dividends_annual)[-5:]
+    div_amounts = [
+        value
+        for row in div_rows
+        if (value := _number(row.get("dividend"))) is not None
+    ]
     if div_amounts:
         possible += 6
         paid_years = sum(1 for v in div_amounts if v > 0)
@@ -393,10 +533,14 @@ def score_shareholder_policy(bundle: FundamentalsBundle) -> CategoryResult:
 
     # Hisse sayısı eğilimi
     shares: list[float] = []
-    for bal in bundle.balance_annual[-5:]:
+    for bal in _ordered_rows(bundle.balance_annual)[-5:]:
         s = bal.get("shares_outstanding")
-        if s is not None:
-            shares.append(s)
+        try:
+            value = float(s) if s is not None else None
+        except (TypeError, ValueError):
+            value = None
+        if value is not None and math.isfinite(value) and value > 0:
+            shares.append(value)
     if len(shares) >= 3:
         possible += 4
         if shares[-1] <= shares[0]:

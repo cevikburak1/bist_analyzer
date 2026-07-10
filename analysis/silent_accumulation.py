@@ -80,7 +80,12 @@ def calculate_cmf(df: pd.DataFrame, period: int = CMF_PERIOD) -> pd.Series:
     high_low = (df["high"] - df["low"]).replace(0, np.nan)
     money_flow_multiplier = ((df["close"] - df["low"]) - (df["high"] - df["close"])) / high_low
     money_flow_volume = money_flow_multiplier.fillna(0) * df["volume"]
-    return money_flow_volume.rolling(period, min_periods=max(5, period // 2)).sum() / df["volume"].rolling(period, min_periods=max(5, period // 2)).sum()
+    volume_sum = df["volume"].rolling(
+        period, min_periods=max(5, period // 2),
+    ).sum().replace(0, np.nan)
+    return money_flow_volume.rolling(
+        period, min_periods=max(5, period // 2),
+    ).sum() / volume_sum
 
 
 def _rsi_positive_divergence(df: pd.DataFrame, horizon: int) -> bool:
@@ -90,18 +95,34 @@ def _rsi_positive_divergence(df: pd.DataFrame, horizon: int) -> bool:
     half = max(10, horizon // 2)
     previous = recent.iloc[:half]
     current = recent.iloc[half:]
-    previous_price_low = _safe(previous["close"].min())
-    current_price_low = _safe(current["close"].min())
-    previous_rsi_low = _safe(previous["rsi"].min())
-    current_rsi_low = _safe(current["rsi"].min())
+    # Fiyat ve RSI diplerini bağımsız minimumlar olarak eşlemek sahte
+    # uyumsuzluk üretir. RSI'ı gerçek fiyat dibinin bulunduğu bardan al.
+    previous_low_idx = previous["close"].astype(float).idxmin()
+    current_low_idx = current["close"].astype(float).idxmin()
+    previous_price_low = _safe(previous.at[previous_low_idx, "close"])
+    current_price_low = _safe(current.at[current_low_idx, "close"])
+    previous_rsi_low = _safe(previous.at[previous_low_idx, "rsi"])
+    current_rsi_low = _safe(current.at[current_low_idx, "rsi"])
     return current_price_low <= previous_price_low * 1.02 and current_rsi_low > previous_rsi_low
 
 
 def _relative_strength(df: pd.DataFrame, index_df: pd.DataFrame) -> tuple[bool, float]:
-    if len(df) < RS_LOOKBACK + 1 or len(index_df) < RS_LOOKBACK + 1:
+    if df.empty or index_df.empty:
         return False, 0.0
-    stock_perf = (_safe(df["close"].iloc[-1]) / _safe(df["close"].iloc[-RS_LOOKBACK - 1], 1.0) - 1) * 100
-    index_perf = (_safe(index_df["close"].iloc[-1]) / _safe(index_df["close"].iloc[-RS_LOOKBACK - 1], 1.0) - 1) * 100
+
+    stock = df[["close"]].rename(columns={"close": "stock"})
+    market = index_df[["close"]].rename(columns={"close": "market"})
+    aligned = stock.join(market, how="inner").dropna().sort_index()
+    if len(aligned) < RS_LOOKBACK + 1:
+        return False, 0.0
+
+    recent = aligned.tail(RS_LOOKBACK + 1)
+    stock_start = _safe(recent["stock"].iloc[0])
+    market_start = _safe(recent["market"].iloc[0])
+    if stock_start <= 0 or market_start <= 0:
+        return False, 0.0
+    stock_perf = (_safe(recent["stock"].iloc[-1]) / stock_start - 1) * 100
+    index_perf = (_safe(recent["market"].iloc[-1]) / market_start - 1) * 100
     rel = stock_perf - index_perf
     return rel > 0, rel
 
@@ -117,7 +138,7 @@ def scan_symbol(
     if df is None or df.empty or len(df) < max(horizon, 80):
         return None
 
-    work = df.copy()
+    work = df.sort_index().copy()
     if "obv" not in work.columns:
         direction = np.sign(work["close"].diff()).fillna(0)
         work["obv"] = (direction * work["volume"]).cumsum()

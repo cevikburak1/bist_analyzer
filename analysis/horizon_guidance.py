@@ -226,7 +226,7 @@ def _decide_medium(
     factors = [
         f"Haftalık sinyal {weekly}",
         f"Aylık sinyal {monthly}",
-        f"Skor {score:.0f}/100",
+        f"Morpheus skoru {score:.0f} (additif)",
         f"Orta vade R/O {rr:.2f}" if rr is not None else "Orta vade hedefi hesaplanmadı",
         f"Piyasa rejimi: {regime_label}" if regime_label else "",
     ]

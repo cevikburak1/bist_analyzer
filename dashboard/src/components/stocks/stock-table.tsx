@@ -127,7 +127,7 @@ export function StockTable({ signals }: StockTableProps) {
           Morpheus Puanlama
         </div>
         <div className="text-sm text-slate-200">
-          Perfect Order, WR%, ADX, hacim katı ve sıkışma/kırılım potansiyeline göre sıralanır
+          Perfect Order, tarihsel kurulum proxy'si, ADX, hacim katı ve sıkışma/kırılım potansiyeline göre sıralanır
         </div>
       </div>
 
@@ -189,7 +189,7 @@ export function StockTable({ signals }: StockTableProps) {
                 <TableHead className="text-slate-300">Neden</TableHead>
                 <TableHead className="text-right">
                   <button type="button" className="ml-auto flex items-center gap-1 text-slate-300" onClick={() => updateSort("wr")}>
-                    WR% {sortKey === "wr" ? sortIcon : null}
+                    Kurulum % {sortKey === "wr" ? sortIcon : null}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
@@ -251,7 +251,12 @@ export function StockTable({ signals }: StockTableProps) {
                         {signal.reason}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right text-slate-300">{(metrics.wr_pct ?? 0).toFixed(0)}</TableCell>
+                    <TableCell
+                      className="text-right text-slate-300"
+                      title={`Maliyet tamponlu tarihsel proxy; n=${metrics.wr_samples ?? 0}, backtest değil`}
+                    >
+                      {(metrics.wr_pct ?? 0).toFixed(0)}
+                    </TableCell>
                     <TableCell className="text-right text-slate-300">{(metrics.adx ?? 0).toFixed(1)}</TableCell>
                     <TableCell className="text-right text-slate-300">{(metrics.v_kat ?? 0).toFixed(1)}</TableCell>
                     <TableCell className="text-center text-xs font-semibold text-slate-300">

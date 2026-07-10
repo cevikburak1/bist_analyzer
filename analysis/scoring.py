@@ -25,6 +25,15 @@ from config import (
 logger = logging.getLogger(__name__)
 
 
+# WR bir backtest degil, benzer teknik kurulumlar icin muhafazakar bir
+# tarihsel proxy'dir. Kucuk fiyat kipirdamalarini basari saymamak icin sabit
+# bir maliyet/slippage tamponu; az ornekli sonuclari puanda sinirlamak icin de
+# asgari ve tam-guven ornek sayilari kullanilir.
+WIN_RATE_RETURN_HURDLE_PCT = 0.5
+MIN_WIN_RATE_SCORE_SAMPLES = 5
+FULL_WIN_RATE_WEIGHT_SAMPLES = 20
+
+
 @dataclass
 class ScoreBreakdown:
     """Skor detay dökümü"""
@@ -47,9 +56,13 @@ class ScoreBreakdown:
 
 def _safe(val) -> float:
     """NaN kontrolü; NaN ise 0 döndürür."""
-    if val is None or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
+    if val is None:
         return 0.0
-    return float(val)
+    try:
+        result = float(val)
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    return result if np.isfinite(result) else 0.0
 
 
 def _bool(value) -> bool:
@@ -62,36 +75,89 @@ def _bool(value) -> bool:
 
 
 def _calculate_win_rate(df: pd.DataFrame | None, horizon: int = 3, lookback: int = 110) -> tuple[float, int, dict]:
+    metadata = {
+        "horizon_bars": horizon,
+        "lookback_bars": lookback,
+        "return_hurdle_pct": WIN_RATE_RETURN_HURDLE_PCT,
+        "cost_buffer_pct": WIN_RATE_RETURN_HURDLE_PCT,
+        "method": "signal_close_to_future_close_proxy",
+        "overlapping_samples": False,
+        "purge_bars": horizon,
+        "is_backtest": False,
+        "minimum_score_samples": MIN_WIN_RATE_SCORE_SAMPLES,
+        "full_weight_samples": FULL_WIN_RATE_WEIGHT_SAMPLES,
+    }
+    if horizon <= 0 or lookback <= 0:
+        return 0.0, 0, {**metadata, "status": "invalid_parameters"}
     if df is None or df.empty or len(df) < horizon + 20:
-        return 0.0, 0, {"status": "insufficient_data"}
+        return 0.0, 0, {**metadata, "status": "insufficient_data"}
 
     work = df.tail(lookback + horizon + 5).copy()
     required = {"close", "perfect_order", "adx", "v_kat", "macd", "macd_signal"}
     if not required.issubset(work.columns):
-        return 0.0, 0, {"status": "missing_columns"}
+        return 0.0, 0, {
+            **metadata,
+            "status": "missing_columns",
+            "missing_columns": sorted(required.difference(work.columns)),
+        }
 
     candidates = work.iloc[:-horizon].copy()
     future_close = work["close"].shift(-horizon).reindex(candidates.index)
-    entry_mask = (
-        candidates["perfect_order"].fillna(False)
-        & (candidates["adx"].fillna(0) >= 25)
-        & (candidates["v_kat"].fillna(0) >= 1.0)
-        & (candidates["macd"].fillna(0) > candidates["macd_signal"].fillna(0))
+    adx = pd.to_numeric(candidates["adx"], errors="coerce").replace([np.inf, -np.inf], np.nan)
+    v_kat = pd.to_numeric(candidates["v_kat"], errors="coerce").replace([np.inf, -np.inf], np.nan)
+    macd = pd.to_numeric(candidates["macd"], errors="coerce").replace([np.inf, -np.inf], np.nan)
+    macd_signal = pd.to_numeric(candidates["macd_signal"], errors="coerce").replace(
+        [np.inf, -np.inf], np.nan,
     )
-    entries = candidates[entry_mask]
-    if entries.empty:
-        return 0.0, 0, {"status": "no_similar_entries"}
+    entry_mask = (
+        candidates["perfect_order"].fillna(False).eq(True)
+        & (adx >= 25)
+        & (v_kat >= 1.0)
+        & (macd > macd_signal)
+    )
+    raw_entry_positions = np.flatnonzero(entry_mask.to_numpy(dtype=bool))
+    if len(raw_entry_positions) == 0:
+        return 0.0, 0, {**metadata, "status": "no_similar_entries"}
 
-    outcomes = future_close.reindex(entries.index) > entries["close"]
-    outcomes = outcomes.dropna()
-    if outcomes.empty:
-        return 0.0, 0, {"status": "no_outcomes"}
+    # Ayni horizon penceresini paylasan ardisik sinyaller bagimsiz gozlem
+    # degildir. Kronolojik olarak ilk kurulumu tutup en az ``horizon`` bar
+    # gecmeden gelenleri purge ederek ornek sayisini sisirmeyi onleriz.
+    purged_positions: list[int] = []
+    for position in raw_entry_positions:
+        if not purged_positions or position - purged_positions[-1] >= horizon:
+            purged_positions.append(int(position))
+    entries = candidates.iloc[purged_positions]
+    metadata["raw_entry_samples"] = int(len(raw_entry_positions))
+    metadata["purged_entry_samples"] = int(len(purged_positions))
 
+    entry_close = pd.to_numeric(entries["close"], errors="coerce")
+    exit_close = pd.to_numeric(future_close.reindex(entries.index), errors="coerce")
+    valid = (
+        entry_close.notna()
+        & exit_close.notna()
+        & np.isfinite(entry_close)
+        & np.isfinite(exit_close)
+        & (entry_close > 0)
+    )
+    returns_pct = ((exit_close[valid] / entry_close[valid]) - 1.0) * 100
+    returns_pct = returns_pct.replace([np.inf, -np.inf], np.nan).dropna()
+    if returns_pct.empty:
+        return 0.0, 0, {**metadata, "status": "no_outcomes"}
+
+    outcomes = returns_pct > WIN_RATE_RETURN_HURDLE_PCT
     wr_pct = float(outcomes.mean() * 100)
     return wr_pct, int(len(outcomes)), {
+        **metadata,
         "status": "ok",
-        "horizon_bars": horizon,
-        "lookback_bars": lookback,
+        "sample_quality": (
+            "low"
+            if len(outcomes) < MIN_WIN_RATE_SCORE_SAMPLES
+            else "partial"
+            if len(outcomes) < FULL_WIN_RATE_WEIGHT_SAMPLES
+            else "full"
+        ),
+        "average_return_pct": round(float(returns_pct.mean()), 3),
+        "median_return_pct": round(float(returns_pct.median()), 3),
     }
 
 
@@ -143,12 +209,15 @@ def score_trend(indicators: dict, wr_pct: float, wr_samples: int) -> tuple[float
         details["trend_slope_positive"] = False
         details["trend_slope_points"] = 0
 
-    if wr_samples >= 3:
-        wr_points = min(25, wr_pct * 0.25)
+    if wr_samples >= MIN_WIN_RATE_SCORE_SAMPLES:
+        sample_weight = min(1.0, wr_samples / FULL_WIN_RATE_WEIGHT_SAMPLES)
+        wr_points = min(25, wr_pct * 0.25) * sample_weight
         score += wr_points
         details["wr_points"] = round(wr_points, 1)
+        details["wr_sample_weight"] = round(sample_weight, 2)
     else:
         details["wr_points"] = 0
+        details["wr_sample_weight"] = 0.0
 
     details["ema20"] = round(ema20, 4)
     details["ema50"] = round(ema50, 4)

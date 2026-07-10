@@ -41,8 +41,14 @@ def find_swing_points(df: pd.DataFrame, depth: int = 10) -> tuple[float, float, 
     close = df["close"].values
     n = len(high)
 
+    def fallback_direction(start: int = 0) -> str:
+        """Pivot bulunamadığında yönü fiyatın gerçek hareketinden çıkar."""
+        first = float(close[start])
+        last = float(close[-1])
+        return "UP" if last >= first else "DOWN"
+
     if n < depth * 3:
-        return float(high[-1]), float(low[-1]), "UP"
+        return float(max(high)), float(min(low)), fallback_direction()
 
     swing_highs = []
     swing_lows = []
@@ -55,7 +61,11 @@ def find_swing_points(df: pd.DataFrame, depth: int = 10) -> tuple[float, float, 
 
     if not swing_highs or not swing_lows:
         period = min(120, n)
-        return float(max(high[-period:])), float(min(low[-period:])), "UP"
+        return (
+            float(max(high[-period:])),
+            float(min(low[-period:])),
+            fallback_direction(n - period),
+        )
 
     last_sh_idx, last_sh_val = swing_highs[-1]
     last_sl_idx, last_sl_val = swing_lows[-1]

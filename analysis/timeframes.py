@@ -29,8 +29,18 @@ class TimeframeSignals:
     yearly: str      # yıllık trend (uzun-vadeli SMA)
 
 
-def _resample(df: pd.DataFrame, rule: str) -> pd.DataFrame:
-    """OHLCV verisini farklı zaman dilimine yeniden örnekler."""
+def _resample(
+    df: pd.DataFrame,
+    rule: str,
+    *,
+    completed_only: bool = True,
+) -> pd.DataFrame:
+    """OHLCV verisini farklı zaman dilimine yeniden örnekler.
+
+    Haftalık/aylık sinyaller tamamlanmamış periyotla geçmiş tamamlanmış
+    periyotları karşılaştırmamalıdır. BIST tatil takvimi olmadan kesin kapanış
+    bilgisi üretilemeyeceği için burada muhafazakâr iş-günü kontrolü uygulanır.
+    """
     agg = {
         "open": "first",
         "high": "max",
@@ -38,7 +48,23 @@ def _resample(df: pd.DataFrame, rule: str) -> pd.DataFrame:
         "close": "last",
         "volume": "sum",
     }
-    return df.resample(rule).agg(agg).dropna()
+    resampled = df.resample(rule).agg(agg).dropna()
+    if not completed_only or resampled.empty or df.empty:
+        return resampled
+
+    last = pd.Timestamp(df.index[-1])
+    if last.tzinfo is not None:
+        last = last.tz_localize(None)
+
+    normalized_rule = rule.upper()
+    if normalized_rule.startswith("W"):
+        is_complete = last.weekday() == 4
+    elif normalized_rule in {"M", "ME"}:
+        is_complete = (last + pd.offsets.BDay(1)).month != last.month
+    else:
+        is_complete = True
+
+    return resampled if is_complete else resampled.iloc[:-1]
 
 
 def _signal_from_trend(close: pd.Series, fast: int, slow: int) -> str:
@@ -121,7 +147,7 @@ def calculate_timeframe_signals(
         daily_signal: ana skorlama motorundan gelen günlük sinyal
     """
     # Haftalık: 10 hafta hızlı, 30 hafta yavaş SMA
-    weekly_df = _resample(df, "W")
+    weekly_df = _resample(df, "W-FRI")
     weekly_sig = _signal_from_trend(weekly_df["close"], fast=10, slow=30)
 
     # Aylık: 6 ay hızlı, 12 ay yavaş SMA

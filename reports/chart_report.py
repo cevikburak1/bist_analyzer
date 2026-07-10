@@ -63,7 +63,7 @@ def generate_table_image(
     date_str = datetime.now().strftime(REPORT_DATE_FORMAT)
     filepath = output_dir / f"bist_table_{date_str}.png"
 
-    headers = ["#", "Hisse", "Fiyat", "Skor", "Aksiyon", "WR%", "ADX", "V/K", "DZL", "SQZ"]
+    headers = ["#", "Hisse", "Fiyat", "Skor", "Aksiyon", "Kur%", "ADX", "V/K", "DZL", "SQZ"]
     rows = []
     cell_colors = []
 

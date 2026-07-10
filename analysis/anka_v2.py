@@ -28,6 +28,7 @@ KNN_PATTERN_HORIZON = 3
 KNN_PATTERN_SPACING = 25
 CALIBRATION_LOOKBACK = 50
 CALIBRATION_HORIZON = 3
+CALIBRATION_MIN_SIGNALS = 10
 
 
 @dataclass
@@ -275,7 +276,7 @@ def _calculate_knn_volume(df: pd.DataFrame) -> AnkaKnnVolume:
 
     latest_relative_volume = round(_safe_float(rel_volume.iloc[-1], 1.0), 2)
     if len(features) < KNN_K + CALIBRATION_HORIZON + 1:
-        return AnkaKnnVolume(latest_relative_volume, 0, 0.5, 0.5, 0.0, "Veri yetersiz")
+        return AnkaKnnVolume(latest_relative_volume, 0, 50.0, 50.0, 0.0, "Veri yetersiz")
 
     latest = features.iloc[-1]
     candidates = features.iloc[: -CALIBRATION_HORIZON]
@@ -284,7 +285,7 @@ def _calculate_knn_volume(df: pd.DataFrame) -> AnkaKnnVolume:
     candidates = candidates.reindex(candidate_returns.index)
 
     if len(candidates) < KNN_K:
-        return AnkaKnnVolume(latest_relative_volume, 0, 0.5, 0.5, 0.0, "Veri yetersiz")
+        return AnkaKnnVolume(latest_relative_volume, 0, 50.0, 50.0, 0.0, "Veri yetersiz")
 
     std = candidates.std().replace(0, 1)
     distances = (((candidates - latest) / std) ** 2).sum(axis=1).pow(0.5)
@@ -372,8 +373,11 @@ def _fibonacci_confirmation(price: float, signal: str, fib: FibonacciResult) -> 
     )
 
 
-def _calibration_status(rate: float | None) -> tuple[str, str]:
-    if rate is None:
+def _calibration_status(
+    rate: float | None,
+    samples: int | None = None,
+) -> tuple[str, str]:
+    if rate is None or (samples is not None and samples < CALIBRATION_MIN_SIGNALS):
         return "INSUFFICIENT", "Veri yetersiz"
     if rate >= 65:
         return "CALIBRATED", "Kalibre"
@@ -427,12 +431,16 @@ def _calculate_calibration(df: pd.DataFrame) -> AnkaCalibration:
 
     recent = df.iloc[-(CALIBRATION_LOOKBACK + CALIBRATION_HORIZON + 1):]
     bull_hits = bull_total = bear_hits = bear_total = 0
+    last_counted_idx = -CALIBRATION_HORIZON
 
     for idx in range(1, len(recent) - CALIBRATION_HORIZON):
         row = recent.iloc[idx]
         prev = recent.iloc[idx - 1]
         direction = _historical_signal(row, prev)
         if direction == "NONE":
+            continue
+        # Birbirinin sonucunu paylaşan örtüşen sinyalleri bağımsız örnek sayma.
+        if idx - last_counted_idx < CALIBRATION_HORIZON:
             continue
 
         current_close = _safe_float(row.get("close"))
@@ -448,13 +456,14 @@ def _calculate_calibration(df: pd.DataFrame) -> AnkaCalibration:
             bear_total += 1
             if future_close < current_close:
                 bear_hits += 1
+        last_counted_idx = idx
 
     total = bull_total + bear_total
     total_hits = bull_hits + bear_hits
     total_rate = (total_hits / total * 100) if total else None
     bull_rate = (bull_hits / bull_total * 100) if bull_total else None
     bear_rate = (bear_hits / bear_total * 100) if bear_total else None
-    status, label = _calibration_status(total_rate)
+    status, label = _calibration_status(total_rate, total)
 
     return AnkaCalibration(
         status=status,
@@ -637,16 +646,40 @@ def _calculate_knn_pattern(df: pd.DataFrame) -> dict[str, Any]:
     weights = np.array([1 / (distance + 1e-6) for distance, _ in nearest])
     returns = np.array([future_return for _, future_return in nearest])
     weighted_return = float(np.average(returns, weights=weights))
-    score = float(np.clip(50 + weighted_return * 900, 0, 100))
-    confidence = float(np.clip(abs(score - 50) * 2, 0, 100))
-    prediction = "YÜKSELİŞ ÖRÜNTÜSÜ" if score > 56 else "DÜŞÜŞ ÖRÜNTÜSÜ" if score < 44 else "NÖTR"
+    raw_score = float(np.clip(50 + weighted_return * 900, 0, 100))
+    bullish_agreement = float((returns > 0.01).mean())
+    bearish_agreement = float((returns < -0.01).mean())
+    # Agreement must be measured in the direction actually predicted by the
+    # weighted return.  Taking max(bull, bear) can assign high confidence to a
+    # bearish weighted forecast merely because an unweighted majority is bull.
+    if raw_score > 56:
+        directional_agreement = bullish_agreement
+    elif raw_score < 44:
+        directional_agreement = bearish_agreement
+    else:
+        directional_agreement = 0.0
+    sample_factor = min(1.0, len(nearest) / KNN_PATTERN_N)
+    magnitude_factor = min(1.0, abs(weighted_return) / 0.02)
+    confidence = float(
+        np.clip(directional_agreement * sample_factor * magnitude_factor * 100, 0, 100)
+    )
+    # Feed a confidence-shrunk score into the layer/synthesis engines.  A low
+    # confidence prediction therefore becomes economically neutral instead of
+    # being labelled neutral while still moving the final score by 30%.
+    score = float(50 + (raw_score - 50) * (confidence / 100))
+    if confidence < 40:
+        prediction = "NÖTR"
+    else:
+        prediction = "YÜKSELİŞ ÖRÜNTÜSÜ" if score > 56 else "DÜŞÜŞ ÖRÜNTÜSÜ" if score < 44 else "NÖTR"
 
     return {
         "score": round(score, 1),
+        "raw_score": round(raw_score, 1),
         "prediction": prediction,
         "confidence": round(confidence, 1),
         "neighbors": len(nearest),
         "weighted_return_pct": round(weighted_return * 100, 2),
+        "confidence_method": "predicted_direction_agreement_x_sample_x_magnitude_then_neutral_shrink",
         "params": params,
     }
 

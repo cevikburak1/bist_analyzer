@@ -15,6 +15,7 @@ from analysis.elliott_wave import ElliottWaveResult
 from analysis.targets import TargetLevels
 from analysis.timeframes import TimeframeSignals
 from analysis.horizon_guidance import TechnicalHorizonGuidance
+from config import SELL_THRESHOLD, STRONG_BUY_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +29,15 @@ class Commentary:
 
 
 def _signal_strength(score: float, signal: str) -> str:
-    """Sinyal gücü etiketi."""
+    """Additif Morpheus eşikleriyle uyumlu sinyal gücü etiketi."""
     if signal == "AL":
-        if score >= 85:
+        if score >= STRONG_BUY_THRESHOLD:
             return "GÜÇLÜ AL"
-        if score >= 75:
-            return "AL"
-        return "ZAYIF AL"
+        return "AL"
     elif signal == "SAT":
-        if score <= 20:
+        if score <= SELL_THRESHOLD * 0.5:
             return "GÜÇLÜ SAT"
-        if score <= 30:
-            return "SAT"
-        return "ZAYIF SAT"
+        return "SAT"
     return "BEKLE"
 
 
@@ -346,7 +343,7 @@ def generate_commentary(
 
     # Key points
     key_points = []
-    key_points.append(f"Skor: {score:.0f}/100 → {strength}")
+    key_points.append(f"Morpheus skoru: {score:.0f} (additif) → {strength}")
     if targets.stop_loss > 0:
         key_points.append(f"Stop Loss: {_format_price(targets.stop_loss)}")
     if targets.short_target > 0:

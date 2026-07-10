@@ -46,25 +46,57 @@ class FundamentalsBundle:
     symbol: str
     fetched_at: str
     sector: dict[str, str]                          # SectorClass dict olarak
-    info: dict[str, Optional[float]]                # anlık özet (None'lı OK)
+    info: dict[str, Any]                            # sayısal özet + piyasa metadatası
     income_annual: list[dict[str, Optional[float]]] # eski->yeni yıl sıralı
     balance_annual: list[dict[str, Optional[float]]]
     cashflow_annual: list[dict[str, Optional[float]]]
     dividends_annual: list[dict[str, Optional[float]]]
     fetch_errors: list[str] = field(default_factory=list)
+    # Bu downloader yalnızca Yahoo'nun `.IS` sembollerini indirir. Alanı
+    # bundle üzerinde saklamak, currency eksik olduğunda BIST hissesinin ABD
+    # hissesi sanılmasını engeller. Eski cache'ler için varsayılan BIST'tir.
+    market: str = "BIST"
 
     def has_minimum_data(self) -> bool:
-        """En az bir yıllık net kâr & özsermaye varsa True."""
+        """Aynı mali yılda net kâr ve pozitif özsermaye varsa ``True``.
+
+        Gelir tablosu ile bilançoyu liste sırasına göre eşlemek, kaynaklardan
+        birinde yıl eksik olduğunda farklı yılları karşılaştırabiliyordu.
+        """
         if not self.income_annual:
             return False
         if not self.balance_annual:
             return False
-        latest_income = self.income_annual[-1]
-        latest_balance = self.balance_annual[-1]
-        return (
-            latest_income.get("net_income") is not None
-            and latest_balance.get("total_equity") is not None
-        )
+
+        income_by_year = {
+            _period_year(row.get("period")): row
+            for row in self.income_annual
+            if _period_year(row.get("period")) is not None
+        }
+        balance_by_year = {
+            _period_year(row.get("period")): row
+            for row in self.balance_annual
+            if _period_year(row.get("period")) is not None
+        }
+        common_years = sorted(set(income_by_year) & set(balance_by_year), reverse=True)
+        for year in common_years:
+            equity = _safe_float(balance_by_year[year].get("total_equity"))
+            if (
+                income_by_year[year].get("net_income") is not None
+                and equity is not None
+                and equity > 0
+            ):
+                return True
+
+        # Dönem alanı bulunmayan eski/elle oluşturulmuş paketlerle uyumluluk.
+        if not income_by_year and not balance_by_year:
+            equity = _safe_float(self.balance_annual[-1].get("total_equity"))
+            return (
+                self.income_annual[-1].get("net_income") is not None
+                and equity is not None
+                and equity > 0
+            )
+        return False
 
 
 # ── yfinance yardımcıları ────────────────────────────────────────────────────
@@ -83,6 +115,19 @@ def _safe_float(value: Any) -> Optional[float]:
     if math.isnan(f) or math.isinf(f):
         return None
     return f
+
+
+def _period_year(value: Any) -> Optional[int]:
+    """Yıllık tablo dönemini mali yıl anahtarına dönüştür."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if len(text) >= 4 and text[:4].isdigit():
+        return int(text[:4])
+    try:
+        return int(pd.to_datetime(value).year)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _row_value(df: pd.DataFrame, candidates: tuple[str, ...]) -> Optional[pd.Series]:
@@ -113,7 +158,16 @@ def _annualize(df: pd.DataFrame, mapping: dict[str, tuple[str, ...]]) -> list[di
     if not rows:
         return []
 
-    columns_sorted = sorted(df.columns)
+    # Tarihleri metinsel sıraya değil gerçek dönem sırasına koy. yfinance
+    # annual tablolarındaki her kolon tek bir mali yıldır; bu nedenle bunları
+    # toplamak değil, ayrı yıllık gözlemler olarak korumak gerekir.
+    def column_sort_key(col: Any) -> tuple[bool, int, str]:
+        parsed = pd.to_datetime(col, errors="coerce")
+        if pd.isna(parsed):
+            return (False, 0, str(col))
+        return (True, int(parsed.value), str(col))
+
+    columns_sorted = sorted(df.columns, key=column_sort_key)
     annual: list[dict[str, Optional[float]]] = []
     for col in columns_sorted:
         period = pd.to_datetime(col).date().isoformat() if hasattr(col, "year") else str(col)
@@ -180,15 +234,18 @@ _INFO_KEYS = (
 )
 
 
-def _extract_info(info: dict) -> dict[str, Optional[float]]:
+def _extract_info(info: dict) -> dict[str, Any]:
     """yfinance info'dan sayısal/string anahtarları topla; sayılar safe_float."""
-    out: dict[str, Optional[float]] = {}
+    out: dict[str, Any] = {}
     for k in _INFO_KEYS:
         out[k] = _safe_float(info.get(k))
     out["longName"] = info.get("longName") or info.get("shortName") or ""
     out["sector_raw"] = info.get("sector") or ""
     out["industry_raw"] = info.get("industry") or ""
     out["currency"] = info.get("currency") or ""
+    out["exchange"] = info.get("exchange") or info.get("fullExchangeName") or ""
+    out["quoteType"] = info.get("quoteType") or ""
+    out["market"] = "BIST"
     return out
 
 
@@ -318,6 +375,7 @@ def download_fundamentals(symbol: str, force: bool = False) -> Optional[Fundamen
         cashflow_annual=cashflow_rows,
         dividends_annual=dividends_rows,
         fetch_errors=errors,
+        market="BIST",
     )
 
     _write_cache(bundle, today)

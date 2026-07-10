@@ -2,7 +2,10 @@ name: Update Market Data
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # GitHub cron is UTC. Europe/Istanbul is UTC+3 year-round: run every
+    # 15 minutes through the BIST session and once after the closing auction.
+    - cron: "*/15 7-14 * * 1-5"
+    - cron: "0,15 15 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -16,6 +19,11 @@ jobs:
   update-market-data:
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    env:
+      TZ: Europe/Istanbul
+      BIST_DAILY_CACHE_TTL_MINUTES: "360"
+      BIST_INTRADAY_CACHE_TTL_MINUTES: "10"
+      BIST_CLOSED_CACHE_TTL_MINUTES: "360"
 
     steps:
       - name: Checkout source

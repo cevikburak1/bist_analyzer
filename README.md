@@ -27,12 +27,12 @@ It downloads daily and intraday OHLCV data, computes multiple analysis engines, 
 The current technical ranking engine is powered by a **Morpheus-style additive score** that can exceed 100 and is built around:
 
 - Trend perfection through EMA alignment
-- Historical win-rate confidence
+- Cost-buffered historical setup outcome proxy (explicitly not a backtest)
 - ADX trend strength
 - Volume explosion and money flow
 - Price position
 - Bollinger squeeze and breakout potential
-- Stop and target levels for every stock
+- Stop and target levels for directional actions; neutral `BEKLE` rows stay unpositioned
 
 > This project is an analysis and research tool. It is not investment advice.
 
@@ -44,7 +44,7 @@ The current technical ranking engine is powered by a **Morpheus-style additive s
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ BIST Analyzer                                                               │
 │                                                                             │
-│  Hisse  Fiyat  Skor  Aksiyon  Neden  WR%  ADX  V/K  DZL  SQZ  Stop  Hedef │
+│  Hisse  Fiyat  Skor  Aksiyon  Neden  Kur% ADX  V/K  DZL  SQZ  Stop  Hedef │
 │  ─────  ─────  ────  ───────  ─────  ───  ───  ───  ───  ───  ────  ───── │
 │  INVES  538.0  261   GÜÇLÜ AL  ...   100  54   1.3   OK   OK   ...   ...  │
 │  MANAS   24.9  256   AL        ...    46  16   3.3   OK   OK   ...   ...  │
@@ -58,8 +58,9 @@ The current technical ranking engine is powered by a **Morpheus-style additive s
 
 | Area | Engine | What It Does |
 |---|---|---|
-| Technical Scoring | Morpheus | Additive score with EMA perfect order, WR%, ADX, V/K, DZL, SQZ |
-| Risk Levels | Stop / Target | Produces stop and target levels for every stock, including BEKLE and KAR AL |
+| Technical Scoring | Morpheus | Additive score with EMA perfect order, historical setup proxy, ADX, V/K, DZL, SQZ |
+| Risk Levels | Stop / Target | Produces levels for directional actions and `KAR AL`; plain `BEKLE` has no synthetic position |
+| Validation | Point-in-time Backtest | Next-bar execution with commission, slippage, conservative stop handling and benchmark comparison |
 | Trend & Momentum | Indicators | EMA, SMA, RSI, MACD, ADX, Bollinger, ATR, OBV |
 | Smart Money | Silent Accumulation | RSI divergence, OBV/CMF accumulation, relative strength, base detection |
 | Intraday Structure | AMD Model | Accumulation, manipulation, CISD, distribution projections |
@@ -78,7 +79,7 @@ The main technical score is no longer a normalized 0-100 score. It is an additiv
 | Component | Signal | Effect |
 |---|---|---|
 | Perfect Order | `close > EMA20 > EMA50 > EMA200` | Adds the explicit DZL bonus |
-| WR% | Last 110 bars of similar historical setups | Adds confidence when prior setups worked |
+| Setup proxy | Non-overlapping outcomes from similar setups in the last 110 bars | Adds sample-weighted context; it is not a trade backtest or promised win rate |
 | V/K | Latest volume divided by 20-day volume average | Rewards real participation |
 | ADX | Trend strength above 25 | Rewards powerful directional moves |
 | Squeeze | Bollinger compression / breakout | Rewards spring-loaded setups |
@@ -126,6 +127,7 @@ bist_analyzer/
 │   ├── indicators.py              # EMA, RSI, MACD, ADX, BB, ATR, OBV, V/K
 │   ├── scoring.py                 # Morpheus additive score engine
 │   ├── signals.py                 # Action, reason, stop and target orchestration
+│   ├── backtest.py                # Point-in-time, next-open backtest engine
 │   ├── amd_model.py               # Intraday AMD / Power of 3 model
 │   ├── anka_v2.py                 # Adaptive ANKA channel and synthesis
 │   ├── cup_handle.py              # Cup and Handle quality engine
@@ -150,6 +152,7 @@ bist_analyzer/
 │   ├── test_scoring.py
 │   └── test_buffett_score.py
 ├── main.py                        # main technical analysis pipeline
+├── backtest_main.py               # one-symbol validation CLI
 ├── buffett_main.py                # fundamental analysis pipeline
 └── silent_accumulation_main.py    # smart money scanner
 ```
@@ -220,7 +223,15 @@ python main.py --symbols THYAO ASELS SASA --quiet --no-html --no-charts
 python main.py --force-download --no-html --no-charts
 ```
 
-### 4. Start the dashboard
+### 4. Run a cost-aware point-in-time backtest
+
+```bash
+python backtest_main.py THYAO --period 5y --commission-bps 10 --slippage-bps 10
+```
+
+Signals only see data available at that historical close and execute at the next bar's open. The output includes return, CAGR, drawdown, Sharpe, trade count, realised win rate, profit factor, exposure and a buy-and-hold benchmark. These figures validate historical behavior; they do not predict future profit.
+
+### 5. Start the dashboard
 
 ```bash
 cd dashboard

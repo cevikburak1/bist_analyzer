@@ -201,7 +201,9 @@ export function StockDetailView({ detail }: StockDetailViewProps) {
               <div>Fiyat pozisyonu: <span className="text-slate-100">{signal.score_breakdown.price_position.toFixed(1)}</span></div>
               <div>Sikisma ve kirilim potansiyeli: <span className="text-slate-100">{(signal.score_breakdown.squeeze_breakout ?? 0).toFixed(1)}</span></div>
               <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-950/70 p-3 text-xs">
-                <div>WR%: <span className="text-slate-100">{(signal.score_breakdown.wr_pct ?? 0).toFixed(0)}</span></div>
+                <div title="Maliyet tamponlu tarihsel kurulum proxy'sidir; gerçek backtest değildir">
+                  Kurulum proxy: <span className="text-slate-100">%{(signal.score_breakdown.wr_pct ?? 0).toFixed(0)} (n={signal.score_breakdown.wr_samples ?? 0})</span>
+                </div>
                 <div>ADX: <span className="text-slate-100">{(signal.score_breakdown.adx ?? 0).toFixed(1)}</span></div>
                 <div>V/K: <span className="text-slate-100">{(signal.score_breakdown.v_kat ?? 0).toFixed(2)}</span></div>
                 <div>DZL: <span className="text-slate-100">{signal.score_breakdown.dzl_ok ? "OK" : "--"}</span></div>

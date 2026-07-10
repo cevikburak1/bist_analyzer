@@ -50,16 +50,45 @@ def calculate_rsi(close: pd.Series, period: int = RSI_PERIOD) -> pd.Series:
     Relative Strength Index (RSI)
     Wilder'ın orijinal yöntemi ile hesaplanır.
     """
-    delta = close.diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = (-delta).where(delta < 0, 0.0)
+    if period <= 0:
+        raise ValueError("RSI period must be positive")
 
-    avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    values = pd.to_numeric(close, errors="coerce").astype(float).replace(
+        [np.inf, -np.inf], np.nan,
+    )
+    rsi = pd.Series(np.nan, index=close.index, dtype=float, name=close.name)
+    if len(values) <= period:
+        return rsi
 
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+    delta = values.diff()
+    gain = delta.clip(lower=0.0)
+    loss = (-delta).clip(lower=0.0)
+
+    # Wilder'in orijinal tohumu ilk ``period`` fiyat degisiminin basit
+    # ortalamasidir. Sonraki degerler Wilder smoothing (alpha=1/period)
+    # ile ilerler. Ilk satirdaki yapay sifiri tohuma katmamak onemlidir.
+    seed_gain = gain.iloc[1: period + 1]
+    seed_loss = loss.iloc[1: period + 1]
+    if seed_gain.notna().sum() < period or seed_loss.notna().sum() < period:
+        return rsi
+
+    wilder_gain = gain.copy()
+    wilder_loss = loss.copy()
+    wilder_gain.iloc[:period] = np.nan
+    wilder_loss.iloc[:period] = np.nan
+    wilder_gain.iloc[period] = float(seed_gain.mean())
+    wilder_loss.iloc[period] = float(seed_loss.mean())
+
+    avg_gain = wilder_gain.ewm(alpha=1.0 / period, adjust=False).mean()
+    avg_loss = wilder_loss.ewm(alpha=1.0 / period, adjust=False).mean()
+
+    normal = (avg_gain > 0) & (avg_loss > 0)
+    rs = avg_gain[normal] / avg_loss[normal]
+    rsi.loc[normal] = 100 - (100 / (1 + rs))
+    rsi.loc[(avg_gain > 0) & (avg_loss == 0)] = 100.0
+    rsi.loc[(avg_gain == 0) & (avg_loss > 0)] = 0.0
+    rsi.loc[(avg_gain == 0) & (avg_loss == 0)] = 50.0
+    return rsi.clip(lower=0.0, upper=100.0)
 
 
 def calculate_macd(
@@ -209,24 +238,29 @@ def calculate_beta(
     Hissenin piyasa endeksine göre beta değerini hesaplar.
     Beta = Cov(stock, market) / Var(market)
     """
-    stock_returns = stock_close.pct_change().dropna().tail(period)
-    market_returns = market_close.pct_change().dropna().tail(period)
-
-    # İki serinin uzunluğunu eşitle
-    min_len = min(len(stock_returns), len(market_returns))
-    if min_len < 30:
-        return 1.0  # Yetersiz veri durumunda varsayılan
-
-    stock_returns = stock_returns.tail(min_len)
-    market_returns = market_returns.tail(min_len)
-
-    cov = stock_returns.cov(market_returns)
-    var = market_returns.var()
-
-    if var == 0:
+    if period <= 0:
         return 1.0
 
-    return cov / var
+    stock_returns = pd.to_numeric(stock_close, errors="coerce").pct_change(fill_method=None)
+    market_returns = pd.to_numeric(market_close, errors="coerce").pct_change(fill_method=None)
+
+    # Beta yalnizca ayni tarih/saatteki getiriler arasinda anlamlidir. Serileri
+    # uzunluklarina gore kesmek, tatil veya eksik barlarda yanlis eslestirir.
+    aligned = pd.concat(
+        [stock_returns.rename("stock"), market_returns.rename("market")],
+        axis=1,
+        join="inner",
+    ).replace([np.inf, -np.inf], np.nan).dropna().tail(period)
+    if len(aligned) < 30:
+        return 1.0  # Yetersiz ortak gozlem durumunda notr varsayilan
+
+    cov = aligned["stock"].cov(aligned["market"])
+    var = aligned["market"].var()
+    if not np.isfinite(cov) or not np.isfinite(var) or var <= np.finfo(float).eps:
+        return 1.0
+
+    beta = cov / var
+    return float(beta) if np.isfinite(beta) else 1.0
 
 
 def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
