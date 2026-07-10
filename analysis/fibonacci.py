@@ -47,8 +47,26 @@ def find_swing_points(df: pd.DataFrame, depth: int = 10) -> tuple[float, float, 
         last = float(close[-1])
         return "UP" if last >= first else "DOWN"
 
+    def fallback_pair(start: int = 0) -> tuple[float, float, str]:
+        """Return chronological anchors instead of unrelated extrema."""
+        direction = fallback_direction(start)
+        segment_high = high[start:]
+        segment_low = low[start:]
+        if direction == "UP":
+            high_pos = int(np.argmax(segment_high))
+            swing_high = float(segment_high[high_pos])
+            swing_low = float(np.min(segment_low[: high_pos + 1]))
+        else:
+            low_pos = int(np.argmin(segment_low))
+            swing_low = float(segment_low[low_pos])
+            swing_high = float(np.max(segment_high[: low_pos + 1]))
+        if swing_high <= swing_low:
+            swing_high = float(np.max(segment_high))
+            swing_low = float(np.min(segment_low))
+        return swing_high, swing_low, direction
+
     if n < depth * 3:
-        return float(max(high)), float(min(low)), fallback_direction()
+        return fallback_pair()
 
     swing_highs = []
     swing_lows = []
@@ -61,11 +79,7 @@ def find_swing_points(df: pd.DataFrame, depth: int = 10) -> tuple[float, float, 
 
     if not swing_highs or not swing_lows:
         period = min(120, n)
-        return (
-            float(max(high[-period:])),
-            float(min(low[-period:])),
-            fallback_direction(n - period),
-        )
+        return fallback_pair(n - period)
 
     last_sh_idx, last_sh_val = swing_highs[-1]
     last_sl_idx, last_sl_val = swing_lows[-1]
@@ -76,13 +90,24 @@ def find_swing_points(df: pd.DataFrame, depth: int = 10) -> tuple[float, float, 
     else:
         direction = "DOWN"
 
-    # En anlamlı swing noktalarını belirle (son 120 gün)
+    # Use one chronological pivot leg.  Independent max(high)/min(low) values
+    # can belong to the opposite order and do not describe a tradable swing.
     lookback_start = max(0, n - 120)
-    relevant_highs = [v for i, v in swing_highs if i >= lookback_start]
-    relevant_lows = [v for i, v in swing_lows if i >= lookback_start]
+    if direction == "UP":
+        end_idx, sh = last_sh_idx, last_sh_val
+        prior_lows = [(i, v) for i, v in swing_lows if lookback_start <= i < end_idx]
+        if not prior_lows:
+            return fallback_pair(lookback_start)
+        _, sl = prior_lows[-1]
+    else:
+        end_idx, sl = last_sl_idx, last_sl_val
+        prior_highs = [(i, v) for i, v in swing_highs if lookback_start <= i < end_idx]
+        if not prior_highs:
+            return fallback_pair(lookback_start)
+        _, sh = prior_highs[-1]
 
-    sh = max(relevant_highs) if relevant_highs else float(max(high[-120:]))
-    sl = min(relevant_lows) if relevant_lows else float(min(low[-120:]))
+    if sh <= sl:
+        return fallback_pair(lookback_start)
 
     return sh, sl, direction
 
@@ -130,13 +155,19 @@ def current_fib_zone(
     retracement_levels: dict,
     swing_high: float,
     swing_low: float,
+    direction: str = "UP",
 ) -> str:
     """Fiyatın hangi Fibonacci bölgesinde olduğunu belirler."""
     if not retracement_levels:
         return "Veri yetersiz"
 
+    endpoints = (
+        [(1.0, swing_low), (0.0, swing_high)]
+        if direction == "UP"
+        else [(0.0, swing_low), (1.0, swing_high)]
+    )
     all_levels = sorted(
-        [(0.0, swing_low), (1.0, swing_high)]
+        endpoints
         + [(r, v) for r, v in retracement_levels.items()],
         key=lambda x: x[1],
     )
@@ -145,7 +176,8 @@ def current_fib_zone(
         lower_ratio, lower_val = all_levels[i]
         upper_ratio, upper_val = all_levels[i + 1]
         if lower_val <= price <= upper_val:
-            return f"%{lower_ratio*100:.1f}-%{upper_ratio*100:.1f} bandı"
+            ratio_low, ratio_high = sorted((lower_ratio, upper_ratio))
+            return f"%{ratio_low*100:.1f}-%{ratio_high*100:.1f} bandı"
 
     if price > swing_high:
         return "Swing high üzerinde (extension bölgesi)"
@@ -163,21 +195,16 @@ def nearest_support_resistance(
     swing_low: float,
 ) -> tuple[float, float]:
     """Fiyata en yakın destek ve direnç seviyelerini döndürür."""
-    all_levels = sorted(set(
+    all_levels = sorted(level for level in set(
         [swing_low, swing_high]
         + list(retracement_levels.values())
         + list(extension_levels.values())
-    ))
+    ) if np.isfinite(level) and level > 0)
 
-    support = swing_low
-    resistance = swing_high
-
-    for level in all_levels:
-        if level < price:
-            support = level
-        elif level > price:
-            resistance = level
-            break
+    supports = [level for level in all_levels if level <= price]
+    resistances = [level for level in all_levels if level > price]
+    support = max(supports) if supports else 0.0
+    resistance = min(resistances) if resistances else 0.0
 
     return round(support, 2), round(resistance, 2)
 
@@ -189,7 +216,7 @@ def calculate_fibonacci(df: pd.DataFrame, current_price: float) -> FibonacciResu
     try:
         sh, sl, direction = find_swing_points(df)
         retracements, extensions = calculate_fib_levels(sh, sl, direction)
-        zone = current_fib_zone(current_price, retracements, sh, sl)
+        zone = current_fib_zone(current_price, retracements, sh, sl, direction)
         support, resistance = nearest_support_resistance(
             current_price, retracements, extensions, sh, sl
         )
