@@ -1,0 +1,13 @@
+{
+  "state": "idle",
+  "run_id": "2bfdcfe4aa324c65ae753638992689b9",
+  "pid": 2425,
+  "requested_symbols": 501,
+  "successful_symbols": 499,
+  "refresh_interval_minutes": 15,
+  "started_at": "2026-07-10T21:43:40.818563",
+  "finished_at": "2026-07-10T21:45:30.121662",
+  "last_success_at": "2026-07-10T21:45:30.121662",
+  "error": "",
+  "updated_at": "2026-07-10T21:45:30.121778"
+}

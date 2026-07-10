@@ -1,0 +1,394 @@
+{
+  "generated_at": "2026-07-10T21:45:31.360447",
+  "symbol": "DOFRB",
+  "name": "DOF ROBOTIK",
+  "sector": {
+    "kind": "DIGER",
+    "label": "Diğer",
+    "source": "yfinance"
+  },
+  "info": {
+    "trailingPE": 108.910255,
+    "forwardPE": null,
+    "priceToBook": 12.292887,
+    "returnOnEquity": 0.19768,
+    "returnOnAssets": 0.06078,
+    "debtToEquity": 42.659,
+    "profitMargins": 0.21954,
+    "grossMargins": 0.66271,
+    "operatingMargins": -0.09408,
+    "dividendYield": null,
+    "fiveYearAvgDividendYield": null,
+    "sharesOutstanding": 150000000.0,
+    "marketCap": 26334498816.0,
+    "freeCashflow": -893577600.0,
+    "currentPrice": 169.9,
+    "previousClose": 176.9,
+    "totalCash": 600605248.0,
+    "totalDebt": 920733888.0,
+    "totalRevenue": 1096129280.0,
+    "netIncomeToCommon": 240641312.0,
+    "ebitda": 247304016.0,
+    "totalAssets": null,
+    "currentRatio": 3.228,
+    "quickRatio": 2.769,
+    "longName": "DOF ROBOTIK",
+    "sector_raw": "Consumer Cyclical",
+    "industry_raw": "Leisure",
+    "currency": "TRY"
+  },
+  "signal": {
+    "symbol": "DOFRB",
+    "label_key": "GECER",
+    "label": "Geçer - Dikkat",
+    "color": "slate",
+    "total_score": 61.45,
+    "margin_of_safety": null,
+    "holding_recommendation": "Daha iyi fırsat çıkana kadar gözlem",
+    "warnings": [
+      "ROE son yılda %11.8, önceki ortalama %55.7 (sert düşüş)",
+      "Son yıl serbest nakit akışı negatif"
+    ],
+    "classification_reason": "Skor 61/100 (60-75 bandı) ama güvenlik marjı hesaplanamadı → geçer ama dikkat",
+    "classification_factors": [
+      {
+        "rule": "Veri Kalitesi",
+        "status": "OK",
+        "detail": "Mevcut puanlanabilir veri: %83 (eşik %50)"
+      },
+      {
+        "rule": "Asgari Veri",
+        "status": "OK",
+        "detail": "Net kâr ve özsermaye verisi mevcut"
+      },
+      {
+        "rule": "Toplam Skor",
+        "status": "OK",
+        "detail": "61/100 (60 = Geçer eşiği, 75 = Harika eşiği)"
+      },
+      {
+        "rule": "Güvenlik Marjı (MoS)",
+        "status": "NA",
+        "detail": "Güvenlik marjı hesaplanamadı — Ortalama FCF negatif - DCF anlamsız"
+      }
+    ],
+    "horizon_guidance": {
+      "short": {
+        "verdict": "BEKLE",
+        "label": "Kısa Vade: Tetikte Bekle",
+        "color": "amber",
+        "reason": "Tez bozulma uyarıları var - kısa vadede yeni pozisyon tehlikeli",
+        "factors": [
+          "Toplam skor 61/100",
+          "Güvenlik marjı hesaplanamadı",
+          "Veri kalitesi %83",
+          "2 tez-bozulma uyarısı"
+        ]
+      },
+      "medium": {
+        "verdict": "KACIN",
+        "label": "Orta Vade: Pozisyon Hafiflet",
+        "color": "rose",
+        "reason": "Düşük skor ve aktif tez bozulma uyarıları orta vadede risk",
+        "factors": [
+          "Toplam skor 61/100",
+          "Güvenlik marjı hesaplanamadı",
+          "Veri kalitesi %83",
+          "2 tez-bozulma uyarısı"
+        ]
+      },
+      "long": {
+        "verdict": "IZLE",
+        "label": "Uzun Vade: Koşullu - Daha İyi Fırsat Bekle",
+        "color": "slate",
+        "reason": "Skor sınırda; uzun vadeli kalite eşiği tam karşılanmıyor",
+        "factors": [
+          "Toplam skor 61/100",
+          "Güvenlik marjı hesaplanamadı",
+          "Veri kalitesi %83",
+          "2 tez-bozulma uyarısı"
+        ]
+      },
+      "overall": "Uzun vade vurgusu: Uzun Vade: Koşullu - Daha İyi Fırsat Bekle. Orta vade: Orta Vade: Pozisyon Hafiflet. Kısa vade: Kısa Vade: Tetikte Bekle."
+    }
+  },
+  "score": {
+    "moat": {
+      "earned": 28.0,
+      "possible": 40.0,
+      "is_na": false,
+      "details": {
+        "roe_avg_5y": 0.4471,
+        "roe_std_5y": 0.3297,
+        "net_income_cagr": 1.429,
+        "net_margin_avg_5y": 0.2521,
+        "net_margin_std_5y": 0.1014
+      }
+    },
+    "financial_health": {
+      "earned": 19.0,
+      "possible": 25.0,
+      "is_na": false,
+      "details": {
+        "debt_to_equity": 0.43,
+        "interest_coverage": 3.07,
+        "current_ratio": 2.88,
+        "positive_fcf_years": 2,
+        "fcf_years_evaluated": 4
+      }
+    },
+    "valuation": {
+      "earned": 0.0,
+      "possible": 14.0,
+      "is_na": false,
+      "details": {
+        "pe": 108.91,
+        "pb": 12.29,
+        "p_fcf": null,
+        "margin_of_safety": null,
+        "intrinsic_value": null
+      }
+    },
+    "shareholder_policy": {
+      "earned": 4.0,
+      "possible": 4.0,
+      "is_na": false,
+      "details": {
+        "dividend_paid_years": null,
+        "shares_change_pct": 0.0
+      }
+    },
+    "total_score": 61.45,
+    "data_quality_pct": 83.0,
+    "has_minimum_data": true
+  },
+  "intrinsic": {
+    "intrinsic_value_per_share": null,
+    "enterprise_value": null,
+    "base_fcf": -250830605.0,
+    "growth_used": null,
+    "discount_rate": 0.2,
+    "terminal_growth": 0.03,
+    "projection_years": 10,
+    "shares_outstanding": 155000000.0,
+    "margin_of_safety": null,
+    "current_price": 169.9,
+    "is_na": true,
+    "reason": "Ortalama FCF negatif - DCF anlamsız"
+  },
+  "fair_value": {
+    "fair_value": 41.7002,
+    "current_price": 169.9,
+    "margin_pct": -75.46,
+    "aggregation_method": "Sector Weighted",
+    "confidence_label": "Orta",
+    "confidence_cv": 28.12,
+    "valid_methods": 8,
+    "market": "BIST",
+    "currency": "TRY",
+    "bond_benchmark": "TR10Y",
+    "inflation_region": "TR CPI",
+    "high_inflation_warning": true,
+    "sector_key": "DIGER",
+    "sector_label": "Diğer",
+    "forward_eps_source": "growth-projection",
+    "methods": {
+      "net_earnings_pe": {
+        "label": "Net Earnings P/E",
+        "value": 47.4995,
+        "source": "sector-normal",
+        "weight": 0.12
+      },
+      "roe_based": {
+        "label": "ROE-Based",
+        "value": 47.4995,
+        "source": "PE × ROE × BVPS",
+        "weight": 0.12
+      },
+      "ev_ebit": {
+        "label": "EV/EBIT",
+        "value": 47.0494,
+        "source": "sector EV/EBIT",
+        "weight": 0.12
+      },
+      "ev_ebitda": {
+        "label": "EV/EBITDA",
+        "value": 11.0554,
+        "source": "sector EV/EBITDA",
+        "weight": 0.12
+      },
+      "ev_revenue": {
+        "label": "EV/Revenue",
+        "value": 18.5814,
+        "source": "sector EV/Revenue",
+        "weight": 0.1
+      },
+      "forward_pe": {
+        "label": "Forward P/E",
+        "value": 85.499,
+        "source": "growth-projection",
+        "weight": 0.12
+      },
+      "forward_ps": {
+        "label": "Forward P/S",
+        "value": 31.9612,
+        "source": "growth-projection",
+        "weight": 0.1
+      },
+      "p_fcf": {
+        "label": "P/FCF",
+        "value": null,
+        "source": "sector P/FCF",
+        "weight": 0.1
+      },
+      "graham_number": {
+        "label": "Graham Number",
+        "value": 35.1719,
+        "source": "sqrt(22.5×EPS×BVPS)",
+        "weight": 0.05
+      },
+      "dcf": {
+        "label": "DCF",
+        "value": null,
+        "source": "3y projection + terminal",
+        "weight": 0.05
+      }
+    },
+    "financials_table": [
+      {
+        "period": "2022-12-31",
+        "net_earnings": 17092249.0,
+        "revenue": 156342926.0,
+        "ebit": 25876788.0,
+        "ebitda": null,
+        "fcf": 4930664.0,
+        "roe": 0.218043
+      },
+      {
+        "period": "2023-12-31",
+        "net_earnings": 167186101.0,
+        "revenue": 422892272.0,
+        "ebit": 185112483.0,
+        "ebitda": null,
+        "fcf": 58401535.0,
+        "roe": 0.968898
+      },
+      {
+        "period": "2024-12-31",
+        "net_earnings": 164513497.0,
+        "revenue": 628321226.0,
+        "ebit": 238996050.0,
+        "ebitda": null,
+        "fcf": -141410929.0,
+        "roe": 0.483985
+      },
+      {
+        "period": "2025-12-31",
+        "net_earnings": 244951325.0,
+        "revenue": 1011968695.0,
+        "ebit": 369741037.0,
+        "ebitda": null,
+        "fcf": -925243690.0,
+        "roe": 0.117568
+      }
+    ],
+    "alerts": [
+      "Premium warning"
+    ]
+  },
+  "history": {
+    "roe": [
+      {
+        "period": "2022-12-31",
+        "roe": 0.218043
+      },
+      {
+        "period": "2023-12-31",
+        "roe": 0.968898
+      },
+      {
+        "period": "2024-12-31",
+        "roe": 0.483985
+      },
+      {
+        "period": "2025-12-31",
+        "roe": 0.117568
+      }
+    ],
+    "revenue": [
+      {
+        "period": "2022-12-31",
+        "value": 156342926.0
+      },
+      {
+        "period": "2023-12-31",
+        "value": 422892272.0
+      },
+      {
+        "period": "2024-12-31",
+        "value": 628321226.0
+      },
+      {
+        "period": "2025-12-31",
+        "value": 1011968695.0
+      }
+    ],
+    "net_income": [
+      {
+        "period": "2022-12-31",
+        "value": 17092249.0
+      },
+      {
+        "period": "2023-12-31",
+        "value": 167186101.0
+      },
+      {
+        "period": "2024-12-31",
+        "value": 164513497.0
+      },
+      {
+        "period": "2025-12-31",
+        "value": 244951325.0
+      }
+    ],
+    "free_cash_flow": [
+      {
+        "period": "2022-12-31",
+        "value": 4930664.0
+      },
+      {
+        "period": "2023-12-31",
+        "value": 58401535.0
+      },
+      {
+        "period": "2024-12-31",
+        "value": -141410929.0
+      },
+      {
+        "period": "2025-12-31",
+        "value": -925243690.0
+      }
+    ],
+    "debt_to_equity": [
+      {
+        "period": "2022-12-31",
+        "value": 3.409765
+      },
+      {
+        "period": "2023-12-31",
+        "value": 2.626776
+      },
+      {
+        "period": "2024-12-31",
+        "value": 2.316748
+      },
+      {
+        "period": "2025-12-31",
+        "value": 0.430413
+      }
+    ],
+    "dividends": []
+  },
+  "fetch_errors": [],
+  "fetched_at": "2026-07-10"
+}

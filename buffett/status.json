@@ -1,0 +1,12 @@
+{
+  "state": "idle",
+  "run_id": "322f263a-37d0-4151-9914-030bfc6be5c5",
+  "pid": 2474,
+  "requested_symbols": 501,
+  "successful_symbols": 501,
+  "started_at": "2026-07-10T21:45:31.137684",
+  "finished_at": "2026-07-10T21:45:31.765989",
+  "last_success_at": "2026-07-10T21:45:31.765989",
+  "error": "",
+  "updated_at": "2026-07-10T21:45:31.766064"
+}

@@ -1,0 +1,278 @@
+{
+  "generated_at": "2026-07-10T21:45:31.360447",
+  "symbol": "ARASE",
+  "name": "Dogu Aras Enerji Yatirimlari AS",
+  "sector": {
+    "kind": "DIGER",
+    "label": "Diğer",
+    "source": "yfinance"
+  },
+  "info": {
+    "trailingPE": 25.062761,
+    "forwardPE": null,
+    "priceToBook": 1.337397,
+    "returnOnEquity": 0.13037,
+    "returnOnAssets": 0.18069,
+    "debtToEquity": 13.205,
+    "profitMargins": 0.07041,
+    "grossMargins": 0.3521,
+    "operatingMargins": 0.26312,
+    "dividendYield": 1.69,
+    "fiveYearAvgDividendYield": null,
+    "sharesOutstanding": 250000000.0,
+    "marketCap": 29950001152.0,
+    "freeCashflow": 2479034112.0,
+    "currentPrice": 119.8,
+    "previousClose": 118.3,
+    "totalCash": 1955636736.0,
+    "totalDebt": 2957212928.0,
+    "totalRevenue": 35131072512.0,
+    "netIncomeToCommon": 2473484032.0,
+    "ebitda": 8117275136.0,
+    "totalAssets": null,
+    "currentRatio": 2.056,
+    "quickRatio": 1.921,
+    "longName": "Dogu Aras Enerji Yatirimlari AS",
+    "sector_raw": "Utilities",
+    "industry_raw": "Utilities - Independent Power Producers",
+    "currency": "TRY"
+  },
+  "signal": {
+    "symbol": "ARASE",
+    "label_key": "YETERSIZ_VERI",
+    "label": "Yetersiz Veri - Değerlendirilemez",
+    "color": "sky",
+    "total_score": 73.33,
+    "margin_of_safety": null,
+    "holding_recommendation": "Manuel inceleme gerek",
+    "warnings": [],
+    "classification_reason": "Veri kalitesi yetersiz (%30) - Buffett skoru güvenilir biçimde hesaplanamadı",
+    "classification_factors": [
+      {
+        "rule": "Veri Kalitesi",
+        "status": "FAIL",
+        "detail": "Mevcut puanlanabilir veri: %30 (eşik %50)"
+      },
+      {
+        "rule": "Asgari Veri",
+        "status": "FAIL",
+        "detail": "Net kâr veya özsermaye verisi eksik"
+      }
+    ],
+    "horizon_guidance": {
+      "short": {
+        "verdict": "DEGERLENDIRILEMEZ",
+        "label": "Değerlendirilemez",
+        "color": "zinc",
+        "reason": "Temel veri yetersiz - Buffett çerçevesinde karar verilemez",
+        "factors": [
+          "Toplam skor 73/100",
+          "Güvenlik marjı hesaplanamadı",
+          "Veri kalitesi %30",
+          "tez-bozulma uyarısı yok"
+        ]
+      },
+      "medium": {
+        "verdict": "DEGERLENDIRILEMEZ",
+        "label": "Değerlendirilemez",
+        "color": "zinc",
+        "reason": "Temel veri yetersiz - Buffett çerçevesinde karar verilemez",
+        "factors": [
+          "Toplam skor 73/100",
+          "Güvenlik marjı hesaplanamadı",
+          "Veri kalitesi %30",
+          "tez-bozulma uyarısı yok"
+        ]
+      },
+      "long": {
+        "verdict": "DEGERLENDIRILEMEZ",
+        "label": "Değerlendirilemez",
+        "color": "zinc",
+        "reason": "Temel veri yetersiz - Buffett çerçevesinde karar verilemez",
+        "factors": [
+          "Toplam skor 73/100",
+          "Güvenlik marjı hesaplanamadı",
+          "Veri kalitesi %30",
+          "tez-bozulma uyarısı yok"
+        ]
+      },
+      "overall": "Temel veri yetersiz; manuel inceleme şart."
+    }
+  },
+  "score": {
+    "moat": {
+      "earned": 0.0,
+      "possible": 0.0,
+      "is_na": true,
+      "details": {
+        "roe_avg_5y": null,
+        "net_income_cagr": null,
+        "net_margin_avg_5y": null
+      }
+    },
+    "financial_health": {
+      "earned": 4.0,
+      "possible": 4.0,
+      "is_na": false,
+      "details": {
+        "debt_to_equity": null,
+        "interest_coverage": null,
+        "current_ratio": 2.06,
+        "positive_fcf_years": null
+      }
+    },
+    "valuation": {
+      "earned": 12.0,
+      "possible": 20.0,
+      "is_na": false,
+      "details": {
+        "pe": 25.06,
+        "pb": 1.34,
+        "p_fcf": 12.08,
+        "margin_of_safety": null,
+        "intrinsic_value": null
+      }
+    },
+    "shareholder_policy": {
+      "earned": 6.0,
+      "possible": 6.0,
+      "is_na": false,
+      "details": {
+        "dividend_paid_years": 5,
+        "dividend_growing": true,
+        "shares_change_pct": null
+      }
+    },
+    "total_score": 73.33,
+    "data_quality_pct": 30.0,
+    "has_minimum_data": false
+  },
+  "intrinsic": {
+    "intrinsic_value_per_share": null,
+    "enterprise_value": null,
+    "base_fcf": null,
+    "growth_used": null,
+    "discount_rate": 0.2,
+    "terminal_growth": 0.03,
+    "projection_years": 10,
+    "shares_outstanding": null,
+    "margin_of_safety": null,
+    "current_price": 119.8,
+    "is_na": true,
+    "reason": "Serbest nakit akışı verisi yok"
+  },
+  "fair_value": {
+    "fair_value": 255.7465,
+    "current_price": 119.8,
+    "margin_pct": 113.48,
+    "aggregation_method": "Sector Weighted",
+    "confidence_label": "Düşük",
+    "confidence_cv": null,
+    "valid_methods": 1,
+    "market": "BIST",
+    "currency": "TRY",
+    "bond_benchmark": "TR10Y",
+    "inflation_region": "TR CPI",
+    "high_inflation_warning": true,
+    "sector_key": "DIGER",
+    "sector_label": "Diğer",
+    "forward_eps_source": "ttm-fallback",
+    "methods": {
+      "net_earnings_pe": {
+        "label": "Net Earnings P/E",
+        "value": null,
+        "source": "sector-normal",
+        "weight": 0.12
+      },
+      "roe_based": {
+        "label": "ROE-Based",
+        "value": null,
+        "source": "PE × ROE × BVPS",
+        "weight": 0.12
+      },
+      "ev_ebit": {
+        "label": "EV/EBIT",
+        "value": null,
+        "source": "sector EV/EBIT",
+        "weight": 0.12
+      },
+      "ev_ebitda": {
+        "label": "EV/EBITDA",
+        "value": 255.7465,
+        "source": "sector EV/EBITDA",
+        "weight": 0.12
+      },
+      "ev_revenue": {
+        "label": "EV/Revenue",
+        "value": null,
+        "source": "sector EV/Revenue",
+        "weight": 0.1
+      },
+      "forward_pe": {
+        "label": "Forward P/E",
+        "value": null,
+        "source": "ttm-fallback",
+        "weight": 0.12
+      },
+      "forward_ps": {
+        "label": "Forward P/S",
+        "value": null,
+        "source": "growth-projection",
+        "weight": 0.1
+      },
+      "p_fcf": {
+        "label": "P/FCF",
+        "value": null,
+        "source": "sector P/FCF",
+        "weight": 0.1
+      },
+      "graham_number": {
+        "label": "Graham Number",
+        "value": null,
+        "source": "sqrt(22.5×EPS×BVPS)",
+        "weight": 0.05
+      },
+      "dcf": {
+        "label": "DCF",
+        "value": null,
+        "source": "3y projection + terminal",
+        "weight": 0.05
+      }
+    },
+    "financials_table": [],
+    "alerts": [
+      "Discount opportunity"
+    ]
+  },
+  "history": {
+    "roe": [],
+    "revenue": [],
+    "net_income": [],
+    "free_cash_flow": [],
+    "debt_to_equity": [],
+    "dividends": [
+      {
+        "period": "2022",
+        "dividend": 0.65746
+      },
+      {
+        "period": "2023",
+        "dividend": 0.338289
+      },
+      {
+        "period": "2024",
+        "dividend": 0.913671
+      },
+      {
+        "period": "2025",
+        "dividend": 2.2
+      },
+      {
+        "period": "2026",
+        "dividend": 2.0
+      }
+    ]
+  },
+  "fetch_errors": [],
+  "fetched_at": "2026-07-10"
+}
