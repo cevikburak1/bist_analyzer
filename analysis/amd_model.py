@@ -20,6 +20,12 @@ ACCUMULATION_FRACTION = 0.34
 EQUAL_LIQUIDITY_TOLERANCE_PCT = 0.18
 DISPLACEMENT_MULTIPLIER = 1.35
 PROJECTION_MULTIPLES = (1.0, 2.0, 4.0)
+SESSION_OPEN_MINUTE = 10 * 60
+SESSION_CLOSE_MINUTE = 18 * 60
+ACCUMULATION_CUTOFF_MINUTE = int(
+    SESSION_OPEN_MINUTE
+    + (SESSION_CLOSE_MINUTE - SESSION_OPEN_MINUTE) * ACCUMULATION_FRACTION
+)
 
 
 @dataclass
@@ -209,6 +215,7 @@ def _params(interval: str) -> dict[str, Any]:
         "interval": interval,
         "session_aware": True,
         "timezone": "Europe/Istanbul",
+        "accumulation_cutoff": f"{ACCUMULATION_CUTOFF_MINUTE // 60:02d}:{ACCUMULATION_CUTOFF_MINUTE % 60:02d}",
     }
 
 
@@ -342,19 +349,37 @@ def _equal_liquidity(df: pd.DataFrame, kind: str) -> list[dict[str, Any]]:
 
 
 def _key_opens(df: pd.DataFrame) -> list[dict[str, Any]]:
-    result: dict[tuple[str, str], dict[str, Any]] = {}
-    wanted = {"10:00": "BIST Açılış", "13:00": "Gün Ortası", "16:00": "Kapanışa Yakın"}
-    for pos, timestamp in enumerate(pd.to_datetime(df.index)):
-        key = timestamp.strftime("%H:%M")
-        if key not in wanted:
+    timestamps = pd.DatetimeIndex(pd.to_datetime(df.index))
+    wanted = [
+        (10 * 60, "BIST Açılış"),
+        (13 * 60, "Gün Ortası"),
+        (16 * 60, "Kapanışa Yakın"),
+    ]
+    result: list[dict[str, Any]] = []
+    for session_date in dict.fromkeys(timestamps.date):
+        positions = np.flatnonzero(timestamps.date == session_date)
+        if len(positions) == 0:
             continue
-        session_key = (timestamp.date().isoformat(), key)
-        result[session_key] = {
-            "label": wanted[key],
-            "time": timestamp.isoformat(),
-            "price": round(_safe_float(df["open"].iloc[pos]), 4),
-        }
-    return list(result.values())[-6:]
+        session_ts = timestamps[positions]
+        minute_values = np.array([ts.hour * 60 + ts.minute for ts in session_ts])
+        positive_steps = np.diff(minute_values)
+        positive_steps = positive_steps[positive_steps > 0]
+        interval_minutes = int(np.median(positive_steps)) if len(positive_steps) else 60
+        for target_minute, label in wanted:
+            candidates = np.flatnonzero(
+                (minute_values <= target_minute)
+                & ((target_minute - minute_values) < max(interval_minutes, 1))
+            )
+            if len(candidates) == 0:
+                continue
+            pos = int(positions[int(candidates[-1])])
+            timestamp = timestamps[pos]
+            result.append({
+                "label": label,
+                "time": timestamp.isoformat(),
+                "price": round(_safe_float(df["open"].iloc[pos]), 4),
+            })
+    return result[-6:]
 
 
 def _istanbul_index(index: pd.Index) -> pd.DatetimeIndex:
@@ -400,12 +425,18 @@ def calculate_amd_model(intraday_df: pd.DataFrame | None, interval: str = "60m")
     if len(session_positions) < 3:
         return _empty("Güncel BIST seansında AMD için yeterli bar yok.", interval)
     session_start = int(session_positions[0])
-    session_size = len(session_positions)
-    accumulation_bars = min(
-        max(2, int(np.ceil(session_size * ACCUMULATION_FRACTION))),
-        session_size - 1,
-    )
-    accumulation_end = session_start + accumulation_bars - 1
+    session_minutes = np.array([
+        df.index[pos].hour * 60 + df.index[pos].minute
+        for pos in session_positions
+    ])
+    accumulation_positions = session_positions[
+        session_minutes <= ACCUMULATION_CUTOFF_MINUTE
+    ]
+    if len(accumulation_positions) < 2:
+        return _empty("Güncel seansta accumulation penceresi için yeterli bar yok.", interval)
+    # Fixed wall-clock boundary: once the first post-cutoff bar arrives, later
+    # prefixes cannot move a previously manipulated bar back into accumulation.
+    accumulation_end = int(accumulation_positions[-1])
     accumulation = _range(df, session_start, accumulation_end)
     sweep = _detect_sweep(df, accumulation, accumulation_end + 1)
     htf_sweep = _daily_sweep(df)

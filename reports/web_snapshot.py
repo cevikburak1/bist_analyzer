@@ -115,14 +115,28 @@ def _source_freshness(
     if not last_bar_complete:
         status = "incomplete"
     else:
-        max_age = (
-            (_interval_delta().total_seconds() / 60)
-            + INTRADAY_REFRESH_MINUTES
-            + 10
-            if intraday and _market_is_open(now)
-            else 4 * 24 * 60
-        )
-        status = "fresh" if age_minutes <= max_age else "stale"
+        if intraday and _market_is_open(now):
+            max_age = (
+                (_interval_delta().total_seconds() / 60)
+                + INTRADAY_REFRESH_MINUTES
+                + 10
+            )
+            is_fresh = age_minutes <= max_age
+        else:
+            # After today's close+grace, yesterday's candle is stale even
+            # though its raw age is below a broad weekend tolerance.  Before
+            # close (and on weekends), the most recent prior session may be up
+            # to four calendar days old to cover a normal Friday->Monday gap.
+            today_completion = datetime.combine(
+                local_now.date(), MARKET_CLOSE_TIME, tzinfo=MARKET_TIMEZONE,
+            ) + BAR_COMPLETION_GRACE
+            data_date = _as_istanbul(data_as_of).date()
+            if local_now.weekday() < 5 and local_now >= today_completion:
+                is_fresh = data_date == local_now.date()
+            else:
+                age_days = (local_now.date() - data_date).days
+                is_fresh = 0 <= age_days <= 4
+        status = "fresh" if is_fresh else "stale"
 
     attrs = getattr(df, "attrs", {}) if df is not None else {}
     return {
@@ -140,6 +154,7 @@ def _summarize_source_freshness(
     *,
     intraday: bool,
     now: datetime,
+    expected_count: int | None = None,
 ) -> dict[str, Any]:
     details = {
         symbol: _source_freshness(df, intraday=intraday, now=now)
@@ -147,6 +162,8 @@ def _summarize_source_freshness(
         if not expected_symbols or symbol in expected_symbols
     }
     missing_symbols = sorted(expected_symbols - set(details))
+    total_expected = max(len(expected_symbols), expected_count or 0)
+    missing_count = max(len(missing_symbols), total_expected - len(details))
     stale_symbols = sorted(
         symbol
         for symbol, item in details.items()
@@ -163,8 +180,8 @@ def _summarize_source_freshness(
 
     if not details:
         status = "missing"
-    elif stale_symbols or missing_symbols:
-        status = "partial" if len(stale_symbols) + len(missing_symbols) < len(expected_symbols) else "stale"
+    elif stale_symbols or missing_count:
+        status = "partial" if details else "stale"
     else:
         status = "fresh"
 
@@ -174,7 +191,8 @@ def _summarize_source_freshness(
         "oldest_data_as_of": min(as_of_values) if as_of_values else None,
         "max_age_minutes": max(ages) if ages else None,
         "available_symbols": len(details),
-        "expected_symbols": len(expected_symbols),
+        "expected_symbols": total_expected,
+        "missing_symbol_count": missing_count,
         "stale_symbols": stale_symbols,
         "missing_symbols": missing_symbols,
     }
@@ -186,12 +204,15 @@ def _build_freshness_payload(
     expected_symbols: set[str],
     *,
     now: datetime,
+    expected_count: int | None = None,
 ) -> dict[str, Any]:
     daily = _summarize_source_freshness(
-        stock_data, expected_symbols, intraday=False, now=now
+        stock_data, expected_symbols, intraday=False, now=now,
+        expected_count=expected_count,
     )
     intraday = _summarize_source_freshness(
-        stock_intraday, expected_symbols, intraday=True, now=now
+        stock_intraday, expected_symbols, intraday=True, now=now,
+        expected_count=expected_count,
     )
     statuses = {daily["status"], intraday["status"]}
     if statuses == {"fresh"}:
@@ -524,15 +545,21 @@ def save_web_snapshot(
     regime: MarketRegime,
     *,
     requested_symbols: int,
+    expected_symbol_names: list[str] | set[str] | None = None,
 ) -> Path:
     now = _utc_now()
     generated_at = now.isoformat()
-    expected_symbols = {sig.symbol for sig in signals}
+    expected_symbols = (
+        {symbol.upper().replace(".IS", "") for symbol in expected_symbol_names}
+        if expected_symbol_names is not None
+        else {sig.symbol for sig in signals}
+    )
     freshness = _build_freshness_payload(
         stock_data,
         stock_intraday,
         expected_symbols,
         now=now,
+        expected_count=requested_symbols,
     )
     data_as_of = _latest_data_as_of(
         freshness["daily"]["latest_data_as_of"],

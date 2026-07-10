@@ -31,7 +31,7 @@ class TimeframeSignals:
 
 def _resample(
     df: pd.DataFrame,
-    rule: str,
+    rule: str | pd.DateOffset,
     *,
     completed_only: bool = True,
 ) -> pd.DataFrame:
@@ -56,10 +56,10 @@ def _resample(
     if last.tzinfo is not None:
         last = last.tz_localize(None)
 
-    normalized_rule = rule.upper()
+    normalized_rule = str(rule).upper()
     if normalized_rule.startswith("W"):
         is_complete = last.weekday() == 4
-    elif normalized_rule in {"M", "ME"}:
+    elif isinstance(rule, pd.offsets.MonthEnd) or normalized_rule in {"M", "ME"}:
         is_complete = (last + pd.offsets.BDay(1)).month != last.month
     else:
         is_complete = True
@@ -151,7 +151,9 @@ def calculate_timeframe_signals(
     weekly_sig = _signal_from_trend(weekly_df["close"], fast=10, slow=30)
 
     # Aylık: 6 ay hızlı, 12 ay yavaş SMA
-    monthly_df = _resample(df, "ME")
+    # DateOffset object works across pandas 2.x ("M") and 3.x ("ME") alias
+    # changes without relying on a version-specific string.
+    monthly_df = _resample(df, pd.offsets.MonthEnd())
     monthly_sig = _signal_from_trend(monthly_df["close"], fast=6, slow=12)
 
     # Yıllık: günlük veride 200 SMA + uzun trend

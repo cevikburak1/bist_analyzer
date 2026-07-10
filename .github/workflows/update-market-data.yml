@@ -3,9 +3,10 @@ name: Update Market Data
 on:
   schedule:
     # GitHub cron is UTC. Europe/Istanbul is UTC+3 year-round: run every
-    # 15 minutes through the BIST session and once after the closing auction.
-    - cron: "*/15 7-14 * * 1-5"
-    - cron: "0,15 15 * * 1-5"
+    # The source interval is 60m, so align refreshes to completed hourly bars.
+    # Retry after the closing auction because Yahoo's daily candle can lag.
+    - cron: "35 7-14 * * 1-5"
+    - cron: "15,30,45 15 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -24,6 +25,7 @@ jobs:
       BIST_DAILY_CACHE_TTL_MINUTES: "360"
       BIST_INTRADAY_CACHE_TTL_MINUTES: "10"
       BIST_CLOSED_CACHE_TTL_MINUTES: "360"
+      BIST_POST_CLOSE_RETRY_MINUTES: "10"
 
     steps:
       - name: Checkout source

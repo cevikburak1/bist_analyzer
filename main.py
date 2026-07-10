@@ -312,6 +312,7 @@ def run_pipeline(
             df_ind = calculate_all_indicators(df)
             stock_data[symbol] = df_ind
             indicators = get_latest_indicators(df_ind)
+            indicators["data_as_of"] = pd.Timestamp(df_ind.index[-1]).isoformat()
 
             # Beta hesapla
             beta = calculate_beta(df["close"], index_df["close"])
@@ -415,6 +416,7 @@ def generate_reports(
         stock_intraday,
         regime,
         requested_symbols=requested_symbols,
+        expected_symbol_names=symbols,
     )
     if not args.quiet:
         console.print(f"  ✓ Web Snapshot: {web_snapshot_path}")

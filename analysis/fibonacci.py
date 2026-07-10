@@ -180,9 +180,17 @@ def current_fib_zone(
             return f"%{ratio_low*100:.1f}-%{ratio_high*100:.1f} bandı"
 
     if price > swing_high:
-        return "Swing high üzerinde (extension bölgesi)"
+        return (
+            "Swing high üzerinde (extension bölgesi)"
+            if direction == "UP"
+            else "Swing high üzerinde (düşüş yapısı geçersiz)"
+        )
     if price < swing_low:
-        return "Swing low altında"
+        return (
+            "Swing low altında"
+            if direction == "UP"
+            else "Swing low altında (extension bölgesi)"
+        )
 
     return "Belirsiz"
 

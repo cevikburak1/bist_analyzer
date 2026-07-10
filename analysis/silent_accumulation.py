@@ -16,6 +16,7 @@ import pandas as pd
 
 
 DEFAULT_HORIZON = 60
+MIN_HORIZON = 20
 MAX_BOTTOM_DISTANCE_PCT = 15.0
 SIDEWAYS_LOOKBACK = 10
 SIDEWAYS_MAX_RANGE_PCT = 4.0
@@ -89,12 +90,14 @@ def calculate_cmf(df: pd.DataFrame, period: int = CMF_PERIOD) -> pd.Series:
 
 
 def _rsi_positive_divergence(df: pd.DataFrame, horizon: int) -> bool:
-    if "rsi" not in df.columns or len(df) < horizon + 5:
+    if horizon < MIN_HORIZON or "rsi" not in df.columns or len(df) < horizon + 5:
         return False
     recent = df.tail(horizon)
-    half = max(10, horizon // 2)
+    half = len(recent) // 2
     previous = recent.iloc[:half]
     current = recent.iloc[half:]
+    if previous.empty or current.empty:
+        return False
     # Fiyat ve RSI diplerini bağımsız minimumlar olarak eşlemek sahte
     # uyumsuzluk üretir. RSI'ı gerçek fiyat dibinin bulunduğu bardan al.
     previous_low_idx = previous["close"].astype(float).idxmin()
@@ -135,6 +138,8 @@ def scan_symbol(
     group: int,
     horizon: int = DEFAULT_HORIZON,
 ) -> SilentAccumulationResult | None:
+    if horizon < MIN_HORIZON:
+        raise ValueError(f"horizon en az {MIN_HORIZON} olmalı")
     if df is None or df.empty or len(df) < max(horizon, 80):
         return None
 

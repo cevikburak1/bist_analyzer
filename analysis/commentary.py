@@ -296,6 +296,7 @@ def generate_commentary(
     ew: ElliottWaveResult,
     targets: TargetLevels,
     *,
+    action: Optional[str] = None,
     timeframes: Optional[TimeframeSignals] = None,
     horizon: Optional[TechnicalHorizonGuidance] = None,
 ) -> Commentary:
@@ -303,7 +304,10 @@ def generate_commentary(
     Tüm göstergeleri sentezleyip profesyonel Türkçe yorum üretir.
     """
     close = indicators.get("close", 0)
-    strength = _signal_strength(score, signal)
+    # The signal engine applies confirmation/sample gates that score alone
+    # cannot reconstruct.  Prefer its final action so commentary never upgrades
+    # an ordinary AL to GÜÇLÜ AL (or hides KAR AL).
+    strength = action or _signal_strength(score, signal)
 
     # Paragraf cümlelerini topla
     sentences = []

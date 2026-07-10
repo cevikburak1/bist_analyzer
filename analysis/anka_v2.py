@@ -26,9 +26,10 @@ KNN_PATTERN_N = 8
 KNN_PATTERN_WINDOW = 6
 KNN_PATTERN_HORIZON = 3
 KNN_PATTERN_SPACING = 25
-CALIBRATION_LOOKBACK = 50
+CALIBRATION_LOOKBACK = 100
 CALIBRATION_HORIZON = 3
-CALIBRATION_MIN_SIGNALS = 10
+CALIBRATION_MIN_SIGNALS = 20
+CALIBRATION_RETURN_HURDLE_PCT = 0.5
 
 
 @dataclass
@@ -99,6 +100,9 @@ class AnkaCalibration:
     total_signals: int
     bull_signals: int
     bear_signals: int
+    confidence_lower_pct: float | None = None
+    return_hurdle_pct: float = CALIBRATION_RETURN_HURDLE_PCT
+    method: str = "purged_trailing_hit_rate_not_oos"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -110,6 +114,9 @@ class AnkaCalibration:
             "total_signals": self.total_signals,
             "bull_signals": self.bull_signals,
             "bear_signals": self.bear_signals,
+            "confidence_lower_pct": self.confidence_lower_pct,
+            "return_hurdle_pct": self.return_hurdle_pct,
+            "method": self.method,
         }
 
 
@@ -376,10 +383,11 @@ def _fibonacci_confirmation(price: float, signal: str, fib: FibonacciResult) -> 
 def _calibration_status(
     rate: float | None,
     samples: int | None = None,
+    confidence_lower: float | None = None,
 ) -> tuple[str, str]:
     if rate is None or (samples is not None and samples < CALIBRATION_MIN_SIGNALS):
         return "INSUFFICIENT", "Veri yetersiz"
-    if rate >= 65:
+    if rate >= 65 and confidence_lower is not None and confidence_lower >= 50:
         return "CALIBRATED", "Kalibre"
     if rate >= 50:
         return "MODERATE", "Orta"
@@ -450,11 +458,11 @@ def _calculate_calibration(df: pd.DataFrame) -> AnkaCalibration:
 
         if direction == "BULL":
             bull_total += 1
-            if future_close > current_close:
+            if ((future_close / current_close) - 1) * 100 > CALIBRATION_RETURN_HURDLE_PCT:
                 bull_hits += 1
         elif direction == "BEAR":
             bear_total += 1
-            if future_close < current_close:
+            if ((future_close / current_close) - 1) * 100 < -CALIBRATION_RETURN_HURDLE_PCT:
                 bear_hits += 1
         last_counted_idx = idx
 
@@ -463,7 +471,17 @@ def _calculate_calibration(df: pd.DataFrame) -> AnkaCalibration:
     total_rate = (total_hits / total * 100) if total else None
     bull_rate = (bull_hits / bull_total * 100) if bull_total else None
     bear_rate = (bear_hits / bear_total * 100) if bear_total else None
-    status, label = _calibration_status(total_rate, total)
+    confidence_lower = None
+    if total:
+        # Wilson 95% lower confidence bound.  A point estimate from a small
+        # trailing sample is not enough to call the engine calibrated.
+        z = 1.96
+        p = total_hits / total
+        denominator = 1 + (z * z) / total
+        center = p + (z * z) / (2 * total)
+        spread = z * np.sqrt((p * (1 - p) + (z * z) / (4 * total)) / total)
+        confidence_lower = max(0.0, (center - spread) / denominator * 100)
+    status, label = _calibration_status(total_rate, total, confidence_lower)
 
     return AnkaCalibration(
         status=status,
@@ -474,6 +492,7 @@ def _calculate_calibration(df: pd.DataFrame) -> AnkaCalibration:
         total_signals=total,
         bull_signals=bull_total,
         bear_signals=bear_total,
+        confidence_lower_pct=_round_or_none(confidence_lower),
     )
 
 
@@ -587,7 +606,12 @@ def _pattern_features(window: pd.DataFrame) -> np.ndarray:
     candle_range = (ranges / atr).replace([np.inf, -np.inf], np.nan).fillna(0)
     lower_shadow = ((window[["open", "close"]].min(axis=1) - window["low"]) / atr).replace([np.inf, -np.inf], np.nan).fillna(0)
     upper_shadow = ((window["high"] - window[["open", "close"]].max(axis=1)) / atr).replace([np.inf, -np.inf], np.nan).fillna(0)
-    relative_volume = (window["volume"] / window["volume"].rolling(20, min_periods=3).mean()).replace([np.inf, -np.inf], np.nan).fillna(1)
+    if "_pattern_relative_volume" in window.columns:
+        relative_volume = window["_pattern_relative_volume"]
+    else:
+        relative_volume = (
+            window["volume"] / window["volume"].rolling(20, min_periods=3).mean()
+        ).replace([np.inf, -np.inf], np.nan).fillna(1)
     return np.array([
         body.mean(),
         candle_range.mean(),
@@ -616,18 +640,23 @@ def _calculate_knn_pattern(df: pd.DataFrame) -> dict[str, Any]:
             "params": params,
         }
 
-    current = _pattern_features(df.tail(KNN_PATTERN_WINDOW))
+    work = df.copy()
+    work["_pattern_relative_volume"] = (
+        work["volume"]
+        / work["volume"].rolling(20, min_periods=3).mean()
+    ).replace([np.inf, -np.inf], np.nan).fillna(1.0)
+    current = _pattern_features(work.tail(KNN_PATTERN_WINDOW))
     candidates: list[tuple[float, float]] = []
-    last_start = len(df) - KNN_PATTERN_WINDOW - KNN_PATTERN_HORIZON
+    last_start = len(work) - KNN_PATTERN_WINDOW - KNN_PATTERN_HORIZON
     for end_idx in range(KNN_PATTERN_WINDOW, last_start, KNN_PATTERN_SPACING):
-        window = df.iloc[end_idx - KNN_PATTERN_WINDOW:end_idx]
+        window = work.iloc[end_idx - KNN_PATTERN_WINDOW:end_idx]
         future_idx = end_idx + KNN_PATTERN_HORIZON - 1
-        if future_idx >= len(df):
+        if future_idx >= len(work):
             continue
         features = _pattern_features(window)
         distance = float(np.linalg.norm(current - features))
-        start_close = _safe_float(df.iloc[end_idx - 1].get("close"))
-        future_close = _safe_float(df.iloc[future_idx].get("close"))
+        start_close = _safe_float(work.iloc[end_idx - 1].get("close"))
+        future_close = _safe_float(work.iloc[future_idx].get("close"))
         if start_close <= 0 or future_close <= 0:
             continue
         future_return = (future_close / start_close) - 1
@@ -666,7 +695,11 @@ def _calculate_knn_pattern(df: pd.DataFrame) -> dict[str, Any]:
     # Feed a confidence-shrunk score into the layer/synthesis engines.  A low
     # confidence prediction therefore becomes economically neutral instead of
     # being labelled neutral while still moving the final score by 30%.
-    score = float(50 + (raw_score - 50) * (confidence / 100))
+    score = (
+        50.0
+        if confidence < 40
+        else float(50 + (raw_score - 50) * (confidence / 100))
+    )
     if confidence < 40:
         prediction = "NÖTR"
     else:

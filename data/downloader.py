@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 MARKET_TIMEZONE = ZoneInfo("Europe/Istanbul")
 MARKET_OPEN_TIME = dt_time(10, 0)
 MARKET_CLOSE_TIME = dt_time(18, 10)
-MARKET_REFRESH_END_TIME = dt_time(18, 30)
+MARKET_REFRESH_END_TIME = dt_time(18, 50)
 BAR_COMPLETION_GRACE = timedelta(minutes=5)
 
 
@@ -59,6 +59,7 @@ INTRADAY_CACHE_TTL_MINUTES = _env_minutes(
 CLOSED_MARKET_CACHE_TTL_MINUTES = _env_minutes(
     "BIST_CLOSED_CACHE_TTL_MINUTES", 360
 )
+POST_CLOSE_RETRY_MINUTES = _env_minutes("BIST_POST_CLOSE_RETRY_MINUTES", 10)
 
 
 def _utc_now() -> datetime:
@@ -277,19 +278,35 @@ def _daily_cache_session_coverage(
         latest = latest.tz_convert(MARKET_TIMEZONE)
 
     if session_open <= current < completion_cutoff:
-        return latest.date() < current.date()
-    if current >= completion_cutoff:
-        if latest.date() == current.date():
+        age_days = (current.date() - latest.date()).days
+        if 0 < age_days <= 4:
             return True
-        # A suspended/holiday symbol may legitimately have no bar today.  Once
-        # it has been checked after the cutoff, do not hammer the provider again
-        # in the same evening merely because no new bar exists.
+        # On a long exchange holiday, avoid hammering the provider after this
+        # process has already checked the old last-traded bar today.  A week-old
+        # cache that has not been rechecked is never accepted blindly.
         checked_at = df.attrs.get("downloaded_at")
         if checked_at:
             checked = pd.Timestamp(checked_at)
             if checked.tzinfo is None:
                 checked = checked.tz_localize(timezone.utc)
-            return checked.to_pydatetime().astimezone(MARKET_TIMEZONE) >= completion_cutoff
+            checked_local = checked.to_pydatetime().astimezone(MARKET_TIMEZONE)
+            checked_age = (current - checked_local).total_seconds() / 60
+            return checked_local.date() == current.date() and checked_age <= DAILY_CACHE_TTL_MINUTES
+        return False
+    if current >= completion_cutoff:
+        if latest.date() == current.date():
+            return True
+        # Yahoo may publish the completed daily candle after 18:15.  A missing
+        # current-session bar is therefore retried on a short cooldown rather
+        # than being accepted for the entire evening after the first check.
+        checked_at = df.attrs.get("downloaded_at")
+        if checked_at:
+            checked = pd.Timestamp(checked_at)
+            if checked.tzinfo is None:
+                checked = checked.tz_localize(timezone.utc)
+            checked_local = checked.to_pydatetime().astimezone(MARKET_TIMEZONE)
+            checked_age = (current - checked_local).total_seconds() / 60
+            return checked_local >= completion_cutoff and checked_age <= POST_CLOSE_RETRY_MINUTES
         return False
     return None
 

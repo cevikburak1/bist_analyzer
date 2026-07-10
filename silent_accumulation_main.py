@@ -15,7 +15,7 @@ if sys.platform == "win32":
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from analysis.indicators import calculate_all_indicators
-from analysis.silent_accumulation import DEFAULT_HORIZON, group_symbols, scan_symbol
+from analysis.silent_accumulation import DEFAULT_HORIZON, MIN_HORIZON, group_symbols, scan_symbol
 from config import LOG_FILE, LOG_LEVEL, MARKET_INDEX_SYMBOL
 from data.downloader import download_stock, load_symbols
 from reports.silent_accumulation_snapshot import save_silent_accumulation_snapshot
@@ -34,7 +34,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Smart Money Silent Accumulation Scanner")
     parser.add_argument("--symbols", nargs="*", default=None, help="Sadece bu sembolleri tara")
     parser.add_argument("--group", type=int, default=None, help="Sadece belirli UI grubunu tara")
-    parser.add_argument("--horizon", type=int, default=DEFAULT_HORIZON, help="Long-term tarama penceresi")
+    def horizon_value(raw: str) -> int:
+        value = int(raw)
+        if value < MIN_HORIZON:
+            raise argparse.ArgumentTypeError(f"horizon en az {MIN_HORIZON} olmalı")
+        return value
+
+    parser.add_argument("--horizon", type=horizon_value, default=DEFAULT_HORIZON, help="Long-term tarama penceresi")
     parser.add_argument("--force", action="store_true", help="Cache'i yoksay")
     return parser.parse_args()
 

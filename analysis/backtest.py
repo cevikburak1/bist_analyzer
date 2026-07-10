@@ -392,7 +392,6 @@ def run_morpheus_backtest(
     from analysis.signals import generate_signal
 
     cfg = config or BacktestConfig()
-    stock = _prepare_ohlcv(stock_df)
     market = _prepare_ohlcv(index_df)
 
     def provider(history: pd.DataFrame) -> SignalDecision:
@@ -416,7 +415,8 @@ def run_morpheus_backtest(
             reason=signal.reason,
         )
 
-    result = run_long_only_backtest(stock, provider, cfg)
+    result = run_long_only_backtest(stock_df, provider, cfg)
+    stock = _prepare_ohlcv(stock_df)
 
     # The generic benchmark is the same stock's buy-and-hold return.  Add the
     # actual XU100 comparison separately so the two baselines cannot be

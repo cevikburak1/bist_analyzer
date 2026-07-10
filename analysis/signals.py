@@ -478,7 +478,7 @@ def generate_signal(
     try:
         comm = generate_commentary(
             symbol, signal, score, indicators, fib, candles, ew, tgt,
-            timeframes=tf_signals, horizon=horizon,
+            action=action, timeframes=tf_signals, horizon=horizon,
         )
     except Exception as e:
         logger.warning("Yorum hatası [%s]: %s", symbol, str(e))

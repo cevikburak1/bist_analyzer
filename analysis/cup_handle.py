@@ -93,6 +93,7 @@ def _params() -> dict[str, Any]:
         "min_breakout_quality": MIN_BREAKOUT_QUALITY,
         "min_pattern_score": MIN_PATTERN_SCORE,
         "target_projection_bars": TARGET_PROJECTION_BARS,
+        "max_breakout_age_bars": MAX_BREAKOUT_AGE_BARS,
     }
 
 

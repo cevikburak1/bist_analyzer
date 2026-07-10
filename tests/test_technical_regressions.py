@@ -126,7 +126,11 @@ def test_single_win_rate_sample_cannot_create_strong_buy():
 
     assert weak_signal.signal == "AL"
     assert weak_signal.action == "AL"
+    assert weak_signal.commentary is not None
+    assert weak_signal.commentary.summary == "AL"
     assert adequate_signal.action == "GÜÇLÜ AL"
+    assert adequate_signal.commentary is not None
+    assert adequate_signal.commentary.summary == "GÜÇLÜ AL"
 
 
 def test_incomplete_long_term_indicators_return_hold_instead_of_sell():

@@ -131,7 +131,7 @@ def test_resample_drops_partial_week_but_keeps_completed_friday():
 
 
 def test_anka_one_historical_signal_is_not_called_calibrated(monkeypatch):
-    index = pd.date_range("2025-01-01", periods=60, freq="B")
+    index = pd.date_range("2025-01-01", periods=120, freq="B")
     df = _ohlc(index, np.linspace(10, 20, len(index)))
     for column, value in {
         "anka_momentum_pct": 2.0,
